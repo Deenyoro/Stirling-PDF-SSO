@@ -45,4 +45,3 @@ if (typeof exports === 'object' && typeof module === 'object')
     Module = {};
   return cv(Module);
 }));
-
