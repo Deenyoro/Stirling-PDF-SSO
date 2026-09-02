@@ -81,11 +81,46 @@ for p in "${SSO_ROOT}"/ci-patches/*.patch; do
   check_one "${p}" "${REPO_ROOT}" "ci-patches" || CI_FAIL=$((CI_FAIL + 1))
 done
 
+# --- CI patches must still produce parseable workflow YAML -------------------
+# A patch can apply "successfully" and still wreck the file: patch(1) does not
+# know YAML, so an insertion landing in the wrong block yields a workflow
+# GitHub refuses to run. This actually happened to ci-patch 0001, which
+# inserted shell into an `env:` mapping. Apply every CI patch to a scratch
+# copy of the tree and parse the result.
+YAML_FAIL=0
+if command -v python3 > /dev/null 2>&1 && python3 -c 'import yaml' > /dev/null 2>&1; then
+  echo "CI patches produce valid workflow YAML:"
+  SCRATCH="$(mktemp -d)"
+  trap 'rm -rf "${SCRATCH}"' EXIT
+  # Only .github/workflows is needed to validate the CI patches.
+  mkdir -p "${SCRATCH}/.github"
+  cp -a "${REPO_ROOT}/.github/workflows" "${SCRATCH}/.github/workflows"
+  for p in "${SSO_ROOT}"/ci-patches/*.patch; do
+    name="$(basename "${p}")"
+    tgt="$(grep -m1 '^--- a/' "${p}" | sed 's|--- a/||')"
+    [ -n "${tgt}" ] && [ -e "${SCRATCH}/${tgt}" ] || continue
+    patch -p1 -F3 --ignore-whitespace --directory="${SCRATCH}" < "${p}" > /dev/null 2>&1 || true
+    if python3 -c "import yaml,sys; yaml.safe_load(open(sys.argv[1]))" "${SCRATCH}/${tgt}" 2>/dev/null; then
+      echo "  ok (valid yaml)       ci-patches/${name}"
+    else
+      echo "  FAIL (breaks yaml)    ci-patches/${name} -> ${tgt}"
+      echo "                        the patch applies but the result will not parse;"
+      echo "                        GitHub will refuse to run that workflow."
+      YAML_FAIL=$((YAML_FAIL + 1))
+    fi
+  done
+  rm -rf "${SCRATCH}"
+  trap - EXIT
+else
+  echo "CI patches produce valid workflow YAML:"
+  echo "  SKIP — python3 with PyYAML not available."
+fi
+
 echo "=========================================="
-echo "SSO: required-fail=${REQUIRED_FAIL} optional-fail=${OPTIONAL_FAIL} ci-fail=${CI_FAIL}"
+echo "SSO: required-fail=${REQUIRED_FAIL} optional-fail=${OPTIONAL_FAIL} ci-fail=${CI_FAIL} yaml-fail=${YAML_FAIL}"
 echo "=========================================="
 
-if [ "${REQUIRED_FAIL}" -gt 0 ] || [ "${CI_FAIL}" -gt 0 ]; then
+if [ "${REQUIRED_FAIL}" -gt 0 ] || [ "${CI_FAIL}" -gt 0 ] || [ "${YAML_FAIL}" -gt 0 ]; then
   echo "SSO: regenerate the FAILing patch(es) above with:"
   echo "SSO:   git fetch upstream && git diff upstream/main HEAD -- <target-file> > <patch-path>"
   exit 1

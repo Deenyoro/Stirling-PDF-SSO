@@ -1,21 +1,21 @@
 diff --git a/.github/workflows/_runner-pick.yml b/.github/workflows/_runner-pick.yml
-index ca2337960..b732dcc2a 100644
+index ca2337960..bdd04b072 100644
 --- a/.github/workflows/_runner-pick.yml
 +++ b/.github/workflows/_runner-pick.yml
-@@ -45,6 +45,16 @@ jobs:
-       - name: Classify the trigger
-         id: decide
-         env:
-+          # SSO fork override: this Deenyoro/Stirling-PDF-SSO repo does not
-+          # have access to the depot.dev runner pool that upstream
-+          # Stirling-Tools/Stirling-PDF uses for "trusted" runs. Force
-+          # is_fork=true on any non-upstream repo so downstream jobs pick
-+          # ubuntu-latest (the GitHub-hosted free runner) and don't sit
-+          # queued forever waiting for a runner that will never appear.
+@@ -51,6 +51,16 @@ jobs:
+         run: |
+           set -eu
+ 
++          # SSO fork override: this repo has no access to the depot.dev runner
++          # pool that upstream Stirling-Tools/Stirling-PDF uses for "trusted"
++          # runs. Force is_fork=true on any non-upstream repo so downstream
++          # jobs pick ubuntu-latest instead of queueing forever on a runner
++          # that will never appear.
 +          if [ "${GITHUB_REPOSITORY}" != "Stirling-Tools/Stirling-PDF" ]; then
 +            echo "is_fork=true" >> "$GITHUB_OUTPUT"
 +            exit 0
 +          fi
-           PR_NUMBER: ${{ github.event.pull_request.number }}
-           HEAD_REPO_FORK: ${{ github.event.pull_request.head.repo.fork }}
-           AUTHOR_ASSOC: ${{ github.event.pull_request.author_association }}
++
+           if [ -z "${PR_NUMBER:-}" ]; then
+             # Not a pull_request event at all (push, schedule, workflow_dispatch,
+             # workflow_call from a non-PR trigger) -> trusted by default.
