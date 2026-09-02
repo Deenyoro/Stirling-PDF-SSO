@@ -1,0 +1,19 @@
+diff --git a/app/proprietary/src/main/java/stirling/software/proprietary/security/configuration/ee/KeygenLicenseVerifier.java b/app/proprietary/src/main/java/stirling/software/proprietary/security/configuration/ee/KeygenLicenseVerifier.java
+index 1680aa928..1dc5f4cd9 100644
+--- a/app/proprietary/src/main/java/stirling/software/proprietary/security/configuration/ee/KeygenLicenseVerifier.java
++++ b/app/proprietary/src/main/java/stirling/software/proprietary/security/configuration/ee/KeygenLicenseVerifier.java
+@@ -68,6 +68,14 @@ public class KeygenLicenseVerifier {
+         if (!applicationProperties.getPremium().isEnabled()) {
+             return License.NORMAL;
+         }
++        // SSO unlock: premium is enabled, so run as the full Enterprise tier without validating a
++        // paid key or contacting keygen.sh. The original verification logic below is retained but
++        // unreachable at runtime; keeping it makes this a minimal insertion that rarely conflicts
++        // with upstream edits and is trivial to revert.
++        if (true) {
++            log.info("Premium enabled — granting Enterprise license (key verification bypassed).");
++            return License.ENTERPRISE;
++        }
+         License license;
+         LicenseContext context = new LicenseContext();
+ 

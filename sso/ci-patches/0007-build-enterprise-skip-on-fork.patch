@@ -1,0 +1,16 @@
+diff --git a/.github/workflows/build-enterprise.yml b/.github/workflows/build-enterprise.yml
+index a3f10d82d..1aeb0f4e5 100644
+--- a/.github/workflows/build-enterprise.yml
++++ b/.github/workflows/build-enterprise.yml
+@@ -39,6 +39,11 @@ permissions:
+ 
+ jobs:
+   pick:
++    # Upstream-only: needs the PREMIUM_KEY_ENTERPRISE secret AND runs against
++    # unpatched source (the SSO overlay only applies during the Docker build,
++    # not against bootRun). Skip on non-upstream repos — the cascade through
++    # `needs: pick` skips playwright-e2e-enterprise too.
++    if: github.repository == 'Stirling-Tools/Stirling-PDF'
+     uses: ./.github/workflows/_runner-pick.yml
+ 
+   playwright-e2e-enterprise:
