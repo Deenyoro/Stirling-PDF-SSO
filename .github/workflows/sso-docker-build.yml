@@ -32,6 +32,7 @@ jobs:
     # runner-scale-sets/stirling-pdf-sso/). The runner pod is ephemeral
     # with an 80 GiB Ceph RBD volume mounted at /var/lib/docker for DinD.
     runs-on: stirling-pdf-sso
+    timeout-minutes: 90
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -76,8 +77,16 @@ jobs:
           build-args: |
             STIRLING_FLAVOR=proprietary
             VERSION_TAG=${{ steps.vars.outputs.tag }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          # Build cache lives in GHCR next to the image, NOT in the GitHub
+          # Actions cache. type=gha,mode=max exported several GB against a
+          # 10 GiB per-repo limit that was already ~7 GiB full: the export
+          # took minutes (178s just to *prepare*), and a runner teardown
+          # during that window failed the job even though the image had
+          # already been pushed successfully. The registry cache writes over
+          # the same connection as the push, has no such quota, and is
+          # shared across ephemeral runners.
+          cache-from: type=registry,ref=${{ steps.vars.outputs.image }}:buildcache
+          cache-to: type=registry,ref=${{ steps.vars.outputs.image }}:buildcache,mode=max,image-manifest=true,oci-mediatypes=true
 
       - name: Summary
         run: |
