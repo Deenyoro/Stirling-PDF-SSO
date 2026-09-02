@@ -1,25 +1,48 @@
 diff --git a/.github/workflows/nightly.yml b/.github/workflows/nightly.yml
-index 63484ee7c..6051cf167 100644
+index 63484ee7c..1056c2075 100644
 --- a/.github/workflows/nightly.yml
 +++ b/.github/workflows/nightly.yml
-@@ -18,6 +18,9 @@ permissions:
-   contents: read
+@@ -19,6 +19,10 @@ permissions:
  
  jobs:
-+    # Upstream-only: nightly cross-browser E2E is upstream infrastructure and is
-+    # not part of the fork's SSO image build. Skipped on any non-upstream repo.
-+    if: github.repository == 'Stirling-Tools/Stirling-PDF'
    playwright-all-browsers:
++    # Upstream-only: nightly cross-browser E2E, the a11y sweep and the Tauri
++    # desktop cache are upstream infrastructure; the fork ships no desktop app
++    # and builds its image from the Dockerfile. Skipped on non-upstream repos.
++    if: github.repository == 'Stirling-Tools/Stirling-PDF'
      name: Playwright (chromium + firefox + webkit)
      runs-on: ubuntu-latest
-@@ -61,6 +64,10 @@ jobs:
-   # Whole-suite accessibility sweep. Pull requests only scan the stories they
-   # touch (frontend-a11y.yml) because a full pass takes ~30 minutes; this covers
-   # everything else, so a violation introduced by a change somewhere other than
-+    # Upstream-only: warms the desktop (Tauri) build cache on upstream's main for
-+    # upstream PR/merge-queue builds. The fork ships no desktop app. Skipped on
-+    # any non-upstream repo.
-+    if: github.repository == 'Stirling-Tools/Stirling-PDF'
+     steps:
+@@ -64,6 +68,10 @@ jobs:
    # the story itself — a shared component, a theme token — still surfaces within
    # a day.
    a11y-all-stories:
++    # Upstream-only: nightly cross-browser E2E, the a11y sweep and the Tauri
++    # desktop cache are upstream infrastructure; the fork ships no desktop app
++    # and builds its image from the Dockerfile. Skipped on non-upstream repos.
++    if: github.repository == 'Stirling-Tools/Stirling-PDF'
+     name: a11y (every story)
+     strategy:
+       fail-fast: false
+@@ -113,6 +121,10 @@ jobs:
+   # testing anything, and Actions scopes a cache written on a PR branch to that PR
+   # alone, so a PR run costs three platform builds and produces nothing reusable.
+   warm-tauri-cache:
++    # Upstream-only: nightly cross-browser E2E, the a11y sweep and the Tauri
++    # desktop cache are upstream infrastructure; the fork ships no desktop app
++    # and builds its image from the Dockerfile. Skipped on non-upstream repos.
++    if: github.repository == 'Stirling-Tools/Stirling-PDF'
+     name: Warm Tauri Rust cache
+     if: github.event_name == 'schedule' || github.ref == 'refs/heads/main'
+     permissions:
+@@ -127,6 +139,10 @@ jobs:
+   # Runs the @nightly tag (conversion scenarios) plus a 10-shard concurrency run
+   # of every other feature.
+   cucumber-nightly:
++    # Upstream-only: nightly cross-browser E2E, the a11y sweep and the Tauri
++    # desktop cache are upstream infrastructure; the fork ships no desktop app
++    # and builds its image from the Dockerfile. Skipped on non-upstream repos.
++    if: github.repository == 'Stirling-Tools/Stirling-PDF'
+     environment:
+       name: ci-unsigned
+       deployment: false
