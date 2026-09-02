@@ -1,0 +1,26 @@
+diff --git a/.github/workflows/frontend-backend-licenses-update.yml b/.github/workflows/frontend-backend-licenses-update.yml
+index 44cf4afb7..9e61e7ec5 100644
+--- a/.github/workflows/frontend-backend-licenses-update.yml
++++ b/.github/workflows/frontend-backend-licenses-update.yml
+@@ -46,7 +46,9 @@ jobs:
+     environment:
+       name: ci-bot
+       deployment: false
+-    if: needs.files-changed.outputs.licenses-frontend == 'true'
++    # Upstream-only: needs the setup-bot GitHub App credentials (APP_ID/secrets)
++    # that only exist on Stirling-Tools/Stirling-PDF. Skipped on any fork.
++    if: github.repository == 'Stirling-Tools/Stirling-PDF' && needs.files-changed.outputs.licenses-frontend == 'true'
+     name: Generate Frontend License Report
+     needs: files-changed
+     runs-on: ubuntu-latest
+@@ -324,7 +326,9 @@ jobs:
+     environment:
+       name: ci-bot
+       deployment: false
+-    if: needs.files-changed.outputs.licenses-backend == 'true'
++    # Upstream-only: needs the setup-bot GitHub App credentials (APP_ID/secrets)
++    # that only exist on Stirling-Tools/Stirling-PDF. Skipped on any fork.
++    if: github.repository == 'Stirling-Tools/Stirling-PDF' && needs.files-changed.outputs.licenses-backend == 'true'
+     needs: files-changed
+     name: Generate Backend License Report
+     runs-on: ubuntu-latest

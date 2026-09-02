@@ -1,0 +1,24 @@
+diff --git a/app/proprietary/src/test/java/stirling/software/proprietary/security/configuration/ee/LicenseKeyCheckerTest.java b/app/proprietary/src/test/java/stirling/software/proprietary/security/configuration/ee/LicenseKeyCheckerTest.java
+index b30b7fdbd..db8b79797 100644
+--- a/app/proprietary/src/test/java/stirling/software/proprietary/security/configuration/ee/LicenseKeyCheckerTest.java
++++ b/app/proprietary/src/test/java/stirling/software/proprietary/security/configuration/ee/LicenseKeyCheckerTest.java
+@@ -73,7 +73,9 @@ class LicenseKeyCheckerTest {
+     }
+ 
+     @Test
+-    void missingFile_resultsNormal(@TempDir Path temp) {
++    void missingFile_grantsEnterprise(@TempDir Path temp) {
++        // Unlocked build: an unresolvable/missing license key still grants the full Enterprise
++        // tier as long as premium is enabled. No paid key is required.
+         Path file = temp.resolve("missing.txt");
+         ApplicationProperties props = new ApplicationProperties();
+         props.getPremium().setEnabled(true);
+@@ -83,7 +85,7 @@ class LicenseKeyCheckerTest {
+                 new LicenseKeyChecker(verifier, props, userLicenseSettingsService);
+         checker.init();
+ 
+-        assertEquals(License.NORMAL, checker.getPremiumLicenseEnabledResult());
++        assertEquals(License.ENTERPRISE, checker.getPremiumLicenseEnabledResult());
+         verifyNoInteractions(verifier);
+     }
+ }

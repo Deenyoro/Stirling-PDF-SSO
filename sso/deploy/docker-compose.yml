@@ -1,0 +1,72 @@
+# Stirling-PDF-SSO deployment stack.
+#
+# Runs the SSO/Enterprise-unlocked image with login enabled. Premium/Enterprise
+# features (audit, metrics, SAML2 SSO, etc.) are switched on automatically at
+# boot by the SSO overlay — no license key required.
+#
+# Quick start:
+#   cp sso/deploy/.env.example sso/deploy/.env   # then edit values
+#   docker compose --env-file sso/deploy/.env -f sso/deploy/docker-compose.yml up -d
+#
+# Configure SSO either with the SECURITY_OAUTH2_* / SECURITY_SAML2_* env vars
+# below, or by editing ./data/config/settings.yml after the first boot.
+
+services:
+  stirling-pdf-sso:
+    image: ${STIRLING_PDF_SSO_IMAGE:-ghcr.io/deenyoro/stirling-pdf-sso:latest}
+    container_name: stirling-pdf-sso
+    restart: unless-stopped
+    ports:
+      - "${STIRLING_PORT:-8080}:8080"
+    volumes:
+      - ./data/tessdata:/usr/share/tessdata:rw
+      - ./data/config:/configs:rw
+      - ./data/logs:/logs:rw
+      - ./data/customFiles:/customFiles:rw
+      # SAML2 keypair / IdP cert (referenced as classpath:/ or file paths in settings.yml)
+      # - ./data/saml:/configs/saml:ro
+    environment:
+      # --- Core / security ---------------------------------------------------
+      # Login MUST be enabled for SSO to be usable.
+      SECURITY_ENABLELOGIN: "true"
+      # loginMethod: all | normal | oauth2 | saml2
+      SECURITY_LOGINMETHOD: "all"
+      # First-boot admin account (change the password, then remove after setup).
+      SECURITY_INITIALLOGIN_USERNAME: "${INITIAL_ADMIN_USERNAME:-admin}"
+      SECURITY_INITIALLOGIN_PASSWORD: "${INITIAL_ADMIN_PASSWORD:-stirling}"
+
+      SYSTEM_DEFAULTLOCALE: en-US
+      SYSTEM_MAXFILESIZE: "100"
+      METRICS_ENABLED: "true"
+      UI_APPNAME: "Stirling-PDF SSO"
+
+      # --- OAuth2 / OIDC SSO (example: generic OIDC provider) ----------------
+      # Uncomment and fill in to enable OIDC SSO. Works without any license.
+      # SECURITY_OAUTH2_ENABLED: "true"
+      # SECURITY_OAUTH2_ISSUER: "https://login.example.com/realms/myrealm"
+      # SECURITY_OAUTH2_CLIENTID: "stirling-pdf"
+      # SECURITY_OAUTH2_CLIENTSECRET: "${OAUTH2_CLIENT_SECRET}"
+      # SECURITY_OAUTH2_USEASUSERNAME: "email"
+      # SECURITY_OAUTH2_SCOPES: "openid, profile, email"
+      # SECURITY_OAUTH2_PROVIDER: "keycloak"
+      # SECURITY_OAUTH2_AUTOCREATEUSER: "true"
+
+      # --- SAML2 SSO (unlocked here; usually configured via settings.yml) ----
+      # SAML2 needs IdP metadata + an SP keypair, so prefer settings.yml under
+      # ./data/config/settings.yml (security.saml2.*). The overlay already sets
+      # premium.enabled=true so the SAML2 login button appears once configured.
+      # SECURITY_SAML2_ENABLED: "true"
+      # SECURITY_SAML2_PROVIDER: "Okta"
+      # SECURITY_SAML2_REGISTRATIONID: "stirling"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8080$${SYSTEM_ROOTURIPATH:-''}/api/v1/info/status | grep -q 'UP'"]
+      interval: 10s
+      timeout: 10s
+      retries: 16
+      start_period: 120s
+    networks:
+      - stirling-network
+
+networks:
+  stirling-network:
+    driver: bridge

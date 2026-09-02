@@ -1,0 +1,14 @@
+diff --git a/.github/workflows/sync_files_v2.yml b/.github/workflows/sync_files_v2.yml
+index d38c14ddb..a9e9a7c9b 100644
+--- a/.github/workflows/sync_files_v2.yml
++++ b/.github/workflows/sync_files_v2.yml
+@@ -32,6 +32,9 @@ permissions:
+   contents: read
+ 
+ jobs:
++    # Upstream-only: syncs files into a sibling upstream repo using a PAT
++    # this fork doesn't have. Skipped on non-upstream repos.
++    if: github.repository == 'Stirling-Tools/Stirling-PDF'
+   sync-files:
+     environment: bot-identity
+     runs-on: ubuntu-latest
