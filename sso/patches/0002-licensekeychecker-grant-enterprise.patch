@@ -1,0 +1,34 @@
+diff --git a/app/proprietary/src/main/java/stirling/software/proprietary/security/configuration/ee/LicenseKeyChecker.java b/app/proprietary/src/main/java/stirling/software/proprietary/security/configuration/ee/LicenseKeyChecker.java
+index 0183e58f2..46f09fe44 100644
+--- a/app/proprietary/src/main/java/stirling/software/proprietary/security/configuration/ee/LicenseKeyChecker.java
++++ b/app/proprietary/src/main/java/stirling/software/proprietary/security/configuration/ee/LicenseKeyChecker.java
+@@ -6,6 +6,7 @@ import java.nio.file.Path;
+ import java.nio.file.Paths;
+ 
+ import org.springframework.boot.context.event.ApplicationReadyEvent;
++import org.springframework.context.annotation.DependsOn;
+ import org.springframework.context.annotation.Lazy;
+ import org.springframework.context.event.EventListener;
+ import org.springframework.scheduling.annotation.Scheduled;
+@@ -22,6 +23,8 @@ import stirling.software.proprietary.service.UserLicenseSettingsService;
+ 
+ @Slf4j
+ @Component
++// Ensure premium is switched on (see PremiumFeatureUnlock) before the license is first evaluated.
++@DependsOn("premiumFeatureUnlock")
+ public class LicenseKeyChecker {
+ 
+     private static final String FILE_PREFIX = "file:";
+@@ -81,8 +84,10 @@ public class LicenseKeyChecker {
+                     log.info("License key is invalid, defaulting to non pro license.");
+                 }
+             } else {
+-                log.error("Failed to obtain license key content.");
+-                premiumEnabledResult = License.NORMAL;
++                // No license key configured. This build does not require a paid key, so premium
++                // being enabled is enough to run as the full Enterprise tier.
++                log.info("Premium enabled with no license key — granting Enterprise features.");
++                premiumEnabledResult = License.ENTERPRISE;
+             }
+         }
+     }

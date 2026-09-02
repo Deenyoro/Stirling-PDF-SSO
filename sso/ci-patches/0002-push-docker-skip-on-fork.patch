@@ -1,0 +1,15 @@
+diff --git a/.github/workflows/push-docker.yml b/.github/workflows/push-docker.yml
+index b3c6d442b..727ab89be 100644
+--- a/.github/workflows/push-docker.yml
++++ b/.github/workflows/push-docker.yml
+@@ -51,7 +51,9 @@ permissions:
+ jobs:
+   push:
+     environment: docker-publish
+-    if: ${{ vars.CI_PROFILE != 'lite' }}
++    # Upstream-only: pushes to stirlingtools Docker Hub orgs using
++    # secrets this fork doesn't have. Skipped on any non-upstream repo.
++    if: ${{ github.repository == 'Stirling-Tools/Stirling-PDF' && vars.CI_PROFILE != 'lite' }}
+     runs-on: ubuntu-24.04-8core
+     permissions:
+       packages: write

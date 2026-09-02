@@ -1,0 +1,15 @@
+diff --git a/.github/workflows/swagger.yml b/.github/workflows/swagger.yml
+index d7408dcfd..3e7fd826f 100644
+--- a/.github/workflows/swagger.yml
++++ b/.github/workflows/swagger.yml
+@@ -23,6 +23,10 @@ permissions:
+ 
+ jobs:
+   push:
++    # Upstream-only: publishes the swagger spec to an external docs site
++    # using credentials this fork doesn't have. Skipped on non-upstream
++    # repos (cascades to push via needs:).
++    if: github.repository == 'Stirling-Tools/Stirling-PDF'
+     # package-publish holds SWAGGERHUB_API_KEY. It requires reviewer approval and
+     # is limited to main / release / v* tags, so every push to release waits on one.
+     environment: package-publish

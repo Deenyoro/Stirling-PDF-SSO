@@ -1,0 +1,41 @@
+# SSO Overlay — upstream contract
+#
+# The symbols this fork's overlay code COMPILES AGAINST. Patches can apply
+# perfectly and the overlay can copy in cleanly while the build still breaks,
+# because upstream renamed or moved a class the overlay references. Neither
+# `patch --dry-run` nor `git merge-tree` can see that. This file closes the gap.
+#
+# Format (tab-separated):  <path>  <grep -E pattern>  <what depends on it>
+# Lines starting with # and blank lines are ignored.
+# Checked by: sso/script/check-upstream-contract.sh
+#
+# --- ApplicationProperties: everything PremiumFeatureUnlock flips -------------
+app/common/src/main/java/stirling/software/common/model/ApplicationProperties.java	class Premium\b	PremiumFeatureUnlock: Premium type import
+app/common/src/main/java/stirling/software/common/model/ApplicationProperties.java	private ProFeatures proFeatures	PremiumFeatureUnlock: premium.getProFeatures()
+app/common/src/main/java/stirling/software/common/model/ApplicationProperties.java	private EnterpriseFeatures enterpriseFeatures	PremiumFeatureUnlock: premium.getEnterpriseFeatures()
+app/common/src/main/java/stirling/software/common/model/ApplicationProperties.java	class PersistentMetrics	PremiumFeatureUnlock: enterprise.getPersistentMetrics()
+app/common/src/main/java/stirling/software/common/model/ApplicationProperties.java	private int retentionDays	PremiumFeatureUnlock: setRetentionDays(30)
+app/common/src/main/java/stirling/software/common/model/ApplicationProperties.java	class Audit\b	PremiumFeatureUnlock: enterprise.getAudit()
+app/common/src/main/java/stirling/software/common/model/ApplicationProperties.java	class DatabaseNotifications	PremiumFeatureUnlock: enterprise.getDatabaseNotifications()
+app/common/src/main/java/stirling/software/common/model/ApplicationProperties.java	private Backup backups	PremiumFeatureUnlock: notifications.getBackups()
+app/common/src/main/java/stirling/software/common/model/ApplicationProperties.java	private Imports imports	PremiumFeatureUnlock: notifications.getImports()
+app/common/src/main/java/stirling/software/common/model/ApplicationProperties.java	private boolean autoUpdateMetadata	PremiumFeatureUnlock: setAutoUpdateMetadata(true)
+app/common/src/main/java/stirling/software/common/model/ApplicationProperties.java	class CustomMetadata	PremiumFeatureUnlock: proFeatures.getCustomMetadata()
+
+# --- KeygenLicenseVerifier: the enum and switch patch 0001 relies on ----------
+app/proprietary/src/main/java/stirling/software/proprietary/security/configuration/ee/KeygenLicenseVerifier.java	enum License	patch 0001: returns License.ENTERPRISE
+app/proprietary/src/main/java/stirling/software/proprietary/security/configuration/ee/KeygenLicenseVerifier.java	ENTERPRISE	patch 0001: the tier being granted
+app/proprietary/src/main/java/stirling/software/proprietary/security/configuration/ee/KeygenLicenseVerifier.java	getPremium\(\)\.isEnabled\(\)	patch 0001: the anchor line it inserts after
+
+# --- LicenseKeyChecker: the field patch 0002 assigns and the bean it waits on -
+app/proprietary/src/main/java/stirling/software/proprietary/security/configuration/ee/LicenseKeyChecker.java	premiumEnabledResult	patch 0002: assigns License.ENTERPRISE
+app/proprietary/src/main/java/stirling/software/proprietary/security/configuration/ee/LicenseKeyChecker.java	class LicenseKeyChecker	patch 0002: @DependsOn("premiumFeatureUnlock") target
+
+# --- The package the overlay drops PremiumFeatureUnlock into -----------------
+app/proprietary/src/main/java/stirling/software/proprietary/security/configuration/ee	.	overlay: destination package for PremiumFeatureUnlock
+
+# --- Dockerfile build inputs -------------------------------------------------
+settings.gradle	project\(':proprietary' *\)	Dockerfile: proprietary module must stay in the build
+app/proprietary/build.gradle	.	Dockerfile: COPY app/proprietary/build.gradle
+app/core/build.gradle	.	Dockerfile: COPY app/core/build.gradle
+app/common/build.gradle	.	Dockerfile: COPY app/common/build.gradle
