@@ -141,7 +141,35 @@ git checkout upstream/main -- <file>          # restore it to pristine
 
 `check-sync-safety.sh` fails if this invariant is ever broken.
 
-### Doing the sync
+### Doing the sync — you don't
+
+`.github/workflows/upstream-auto-sync.yml` runs **daily at 04:00 UTC** (and on
+manual dispatch). It does the whole thing without the Sync-fork button:
+
+1. fetch `upstream/main`; stop if there is nothing new,
+2. stamp a recovery ref on **origin** (`refs/sso-presync/<timestamp>`),
+3. merge `upstream/main`,
+4. `heal-patches.sh` — re-anchor any drifted `sso/patches/` diff with
+   `git apply --3way`, regenerate it exactly and commit the refresh, so drift
+   never accumulates across syncs,
+5. gate: `verify-patches.sh`, `check-upstream-contract.sh`, and a full
+   `apply-overlay.sh` + `apply-patches.sh` run against a throwaway copy of the
+   merged tree,
+6. push, then dispatch the image build.
+
+Nothing is pushed unless every gate passes. If a gate fails, the fork stays on
+the last known-good tree and an issue is filed with the log. The only failure
+that needs a human is upstream rewriting the exact lines a **required** patch
+changes — two small hunks in `KeygenLicenseVerifier` and `LicenseKeyChecker`.
+
+Upstream's own workflows are switched off on the fork through the Actions API
+(the `housekeeping` job in `sso-docker-build.yml`), not by committing
+`ci-patches/` into `.github/workflows/` — committing them would modify
+upstream-tracked files and reintroduce exactly the conflicts this design
+removes. `ci-patches/` is kept only for the case where a workflow must be
+*modified* rather than disabled.
+
+### Doing it by hand
 
 ```bash
 git remote add upstream https://github.com/Stirling-Tools/Stirling-PDF.git   # once
