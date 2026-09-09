@@ -1,0 +1,144 @@
+name: Upstream auto-sync
+
+# Presses "Sync fork" for you, every day, and only when the result is proven
+# buildable. The fork never modifies an upstream-tracked file (the whole
+# customization lives in sso/), so the merge itself is conflict-free by
+# construction; what this workflow adds is the guarantee that the SSO unlock
+# still lands on the newly-merged tree BEFORE anything is pushed:
+#
+#   1. fetch upstream, stop early if there is nothing new
+#   2. stamp a recovery ref on origin (refs/sso-presync/<ts>) — a bad sync is
+#      always reversible, no fork commit can ever be lost
+#   3. merge upstream/main
+#   4. heal-patches.sh — re-anchor drifted sso/patches diffs (git apply --3way)
+#      and commit the refreshed diffs so drift never accumulates
+#   5. gate: apply the overlay + patches to a throwaway copy of the merged
+#      tree, and re-check the upstream contract the overlay compiles against
+#   6. push, then dispatch the image build (a GITHUB_TOKEN push does not
+#      trigger workflows on its own)
+#
+# If any step cannot be resolved automatically, nothing is pushed and an issue
+# is filed with the log — the fork stays on the last known-good tree.
+on:
+  schedule:
+    - cron: "0 4 * * *" # daily 04:00 UTC
+  workflow_dispatch:
+
+concurrency:
+  group: upstream-auto-sync
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  issues: write
+  actions: write
+
+env:
+  UPSTREAM_URL: https://github.com/Stirling-Tools/Stirling-PDF.git
+  UPSTREAM_BRANCH: main
+  ISSUE_TITLE: "Upstream auto-sync needs a human"
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Full history: heal-patches.sh 3-way merges against pre-image blobs.
+          fetch-depth: 0
+
+      - name: Merge upstream, heal patches, verify
+        id: sync
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          exec > >(tee sync.log) 2>&1
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote add upstream "$UPSTREAM_URL" 2>/dev/null \
+            || git remote set-url upstream "$UPSTREAM_URL"
+          git fetch --no-tags upstream "$UPSTREAM_BRANCH"
+
+          behind="$(git rev-list --count "HEAD..upstream/${UPSTREAM_BRANCH}")"
+          echo "Behind upstream by ${behind} commit(s)."
+          echo "behind=${behind}" >> "$GITHUB_OUTPUT"
+          if [ "$behind" -eq 0 ]; then
+            echo "Already up to date — nothing to do."
+            exit 0
+          fi
+
+          # Recovery point on the remote, before anything is merged.
+          stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+          if git push origin "HEAD:refs/sso-presync/${stamp}"; then
+            echo "Recovery ref pushed: refs/sso-presync/${stamp}"
+            echo "Restore with: git fetch origin refs/sso-presync/${stamp} && git reset --hard FETCH_HEAD"
+          else
+            echo "WARN: could not push the recovery ref — continuing (the merge is"
+            echo "a fast-forwardable merge commit; origin's reflog still has the old tip)."
+          fi
+
+          if ! git merge --no-edit "upstream/${UPSTREAM_BRANCH}"; then
+            git merge --abort || true
+            echo "FATAL: merge conflict with upstream — the fork footprint has"
+            echo "drifted outside sso/. Run sso/script/check-sync-safety.sh locally."
+            exit 1
+          fi
+
+          bash sso/script/heal-patches.sh
+          if ! git diff --quiet -- sso/patches; then
+            git add sso/patches
+            git commit -m "chore(sso): re-anchor drifted patches after upstream sync"
+          fi
+
+          bash sso/script/verify-patches.sh
+          bash sso/script/check-upstream-contract.sh
+
+          # Gate: the overlay + patches must actually land on the merged tree.
+          # Done in a throwaway copy so the tree we push stays pristine.
+          gate="${RUNNER_TEMP}/gate"
+          rm -rf "$gate" && mkdir -p "$gate"
+          tar -c --exclude=.git . | tar -x -C "$gate"
+          docker run --rm -v "$gate:/src" -w /src alpine:3 \
+            sh -c 'apk add -q --no-cache bash patch rsync findutils \
+                   && bash sso/script/apply-overlay.sh \
+                   && bash sso/script/apply-patches.sh'
+
+          git push origin "HEAD:${GITHUB_REF_NAME}"
+          echo "Pushed ${behind} upstream commit(s) to ${GITHUB_REF_NAME}."
+
+      - name: Trigger the image build
+        if: steps.sync.outcome == 'success' && steps.sync.outputs.behind != '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # A push made with GITHUB_TOKEN does not start workflows, so the
+          # build is dispatched explicitly.
+          gh workflow run sso-docker-build.yml --ref "${GITHUB_REF_NAME}"
+
+      - name: File an issue when the sync needs a human
+        if: steps.sync.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          body="$(printf 'The automatic upstream sync stopped and pushed nothing — the fork is still on the last known-good tree.\n\n```\n%s\n```\n\nFix locally (`sso/script/sync-upstream.sh`), push, and this issue closes on the next successful run.' "$(tail -n 80 sync.log)")"
+          existing="$(gh issue list --state open --json number,title -q ".[] | select(.title == \"$ISSUE_TITLE\") | .number" | head -1)"
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body "$body"
+          else
+            gh issue create --title "$ISSUE_TITLE" --body "$body"
+          fi
+          exit 1
+
+      - name: Close the issue once syncing works again
+        if: steps.sync.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh issue list --state open --json number,title \
+            -q ".[] | select(.title == \"$ISSUE_TITLE\") | .number" |
+          while read -r number; do
+            gh issue close "$number" --comment "Auto-sync succeeded again."
+          done

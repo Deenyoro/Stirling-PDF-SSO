@@ -1,16 +1,16 @@
 diff --git a/app/proprietary/src/main/java/stirling/software/proprietary/security/configuration/ee/LicenseKeyChecker.java b/app/proprietary/src/main/java/stirling/software/proprietary/security/configuration/ee/LicenseKeyChecker.java
-index 0183e58f2..46f09fe44 100644
+index d8dbfc0e0..b7370008a 100644
 --- a/app/proprietary/src/main/java/stirling/software/proprietary/security/configuration/ee/LicenseKeyChecker.java
 +++ b/app/proprietary/src/main/java/stirling/software/proprietary/security/configuration/ee/LicenseKeyChecker.java
-@@ -6,6 +6,7 @@ import java.nio.file.Path;
- import java.nio.file.Paths;
+@@ -5,6 +5,7 @@ import java.nio.file.Files;
+ import java.nio.file.Path;
  
  import org.springframework.boot.context.event.ApplicationReadyEvent;
 +import org.springframework.context.annotation.DependsOn;
  import org.springframework.context.annotation.Lazy;
  import org.springframework.context.event.EventListener;
  import org.springframework.scheduling.annotation.Scheduled;
-@@ -22,6 +23,8 @@ import stirling.software.proprietary.service.UserLicenseSettingsService;
+@@ -21,6 +22,8 @@ import stirling.software.proprietary.service.UserLicenseSettingsService;
  
  @Slf4j
  @Component
@@ -19,7 +19,7 @@ index 0183e58f2..46f09fe44 100644
  public class LicenseKeyChecker {
  
      private static final String FILE_PREFIX = "file:";
-@@ -81,8 +84,10 @@ public class LicenseKeyChecker {
+@@ -83,8 +86,10 @@ public class LicenseKeyChecker {
                      log.info("License key is invalid, defaulting to non pro license.");
                  }
              } else {
