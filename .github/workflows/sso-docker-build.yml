@@ -26,6 +26,36 @@ env:
   REGISTRY: ghcr.io
 
 jobs:
+  housekeeping:
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - name: Disable foreign workflows
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Upstream's own workflows (PR labelers, stale-bot, scorecard,
+          # nightly e2e, release/publish jobs) only make sense on
+          # Stirling-Tools/Stirling-PDF. On the fork they burn minutes and go
+          # red purely from upstream's state. Disabling them through the
+          # Actions API — rather than committing sso/ci-patches/ into
+          # .github/workflows — keeps the "the fork never modifies an
+          # upstream-tracked file" invariant that makes every sync
+          # conflict-free, and it also covers workflows upstream adds later.
+          keep=".github/workflows/sso-docker-build.yml .github/workflows/upstream-auto-sync.yml"
+          gh api "repos/${{ github.repository }}/actions/workflows" --paginate \
+            -q '.workflows[] | [(.id|tostring), .state, .path] | @tsv' |
+          while IFS=$'\t' read -r id state path; do
+            case " $keep " in
+              *" $path "*) continue ;;
+            esac
+            if [ "$state" = "active" ]; then
+              echo "Disabling foreign workflow: $path"
+              gh api -X PUT "repos/${{ github.repository }}/actions/workflows/$id/disable"
+            fi
+          done
+
   build:
     # Self-hosted runner scale set in the AG-Talos cluster
     # (helmrelease at kubernetes/apps/github/actions-runner-controller/
@@ -33,9 +63,30 @@ jobs:
     # with an 80 GiB Ceph RBD volume mounted at /var/lib/docker for DinD.
     runs-on: stirling-pdf-sso
     timeout-minutes: 90
+    permissions:
+      contents: write
+      packages: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # Full history so heal-patches.sh can 3-way re-anchor drifted
+          # patches against their pre-image blobs.
+          fetch-depth: 0
+
+      - name: Self-heal drifted SSO patches
+        # Re-anchors sso/patches/*.patch against the current tree (git apply
+        # --3way) and pushes the refreshed diffs back, so upstream refactors
+        # never accumulate drift and the Docker build's patch step keeps
+        # landing exactly. Only a rewrite of the exact unlock lines stops it.
+        env:
+          HEAL_PUSH_BRANCH: ${{ github.ref_type == 'branch' && github.ref_name || '' }}
+        run: bash sso/script/heal-patches.sh
+
+      - name: Verify the overlay contract still holds
+        run: |
+          bash sso/script/verify-patches.sh
+          bash sso/script/check-upstream-contract.sh
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
