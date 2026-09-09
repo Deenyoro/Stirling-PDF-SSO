@@ -5,9 +5,9 @@ import {
   UsersIcon,
   SourcesIcon,
   IntegrationsIcon,
-  PoliciesIcon,
   PipelinesIcon,
   DocumentsIcon,
+  ReviewIcon,
   InfrastructureIcon,
   UsageIcon,
   DocsIcon,
@@ -31,13 +31,14 @@ export interface NavGroup {
 // Sidebar nav groups. This is a flavor seam: the SaaS build shadows this file to
 // drop sections not yet shipped there (see src/portal-saas/components/sidebarGroups).
 
-// The processor's own workflow: home plus the pipeline it feeds.
+// The processor's own workflow: home plus the pipeline it feeds. Policies were folded into
+// Pipelines (a policy is a pipeline the org requires), so there's no separate Policies tab.
 export const GROUP_PROCESSOR: NavEntry[] = [
   { id: "home", icon: <HomeIcon /> },
   { id: "sources", icon: <SourcesIcon /> },
-  { id: "policies", icon: <PoliciesIcon /> },
   { id: "pipelines", icon: <PipelinesIcon /> },
   { id: "documents", icon: <DocumentsIcon /> },
+  { id: "review", icon: <ReviewIcon /> },
 ];
 
 // The wider platform around the processor: people, connections, infra, billing, docs.
