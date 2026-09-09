@@ -18,6 +18,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 import stirling.software.common.model.ApplicationProperties;
+import stirling.software.proprietary.accountlink.EntitlementCache;
+import stirling.software.proprietary.accountlink.InstanceEntitlement;
 import stirling.software.proprietary.model.UserLicenseSettings;
 import stirling.software.proprietary.security.configuration.ee.KeygenLicenseVerifier.License;
 import stirling.software.proprietary.security.configuration.ee.LicenseKeyChecker;
@@ -50,6 +52,9 @@ public class UserLicenseSettingsService {
     private final UserService userService;
     private final ApplicationProperties applicationProperties;
     private final ObjectProvider<LicenseKeyChecker> licenseKeyChecker;
+
+    /** Absent unless this instance is linked to SaaS (account-link disabled by default). */
+    private final ObjectProvider<EntitlementCache> entitlementCache;
 
     /**
      * Gets the current user license settings, creating them if they don't exist.
@@ -316,8 +321,16 @@ public class UserLicenseSettingsService {
             grandfatheredLimit = DEFAULT_USER_LIMIT;
         }
 
-        // No license: use grandfathered limit
+        // A valid licence answers first. Team is moving to being sold on SaaS with no licence at
+        // all, so in the end state only Enterprise holds one, and Enterprise should outrank SaaS:
+        // it is contracted and has to keep working offline. Until then a legacy licence keeps
+        // whatever it granted, and a customer worse off under it can simply remove it.
         if (!hasPaidLicense()) {
+            Integer fromSaas = linkedTeamAllowance();
+            if (fromSaas != null) {
+                log.debug("No licence; linked team allowance: {} users", fromSaas);
+                return fromSaas;
+            }
             log.debug("No license: using grandfathered limit of {}", grandfatheredLimit);
             return grandfatheredLimit;
         }
@@ -336,6 +349,25 @@ public class UserLicenseSettingsService {
                 licenseMaxUsers,
                 grandfatheredLimit);
         return licenseMaxUsers;
+    }
+
+    /**
+     * Users this instance's linked team is entitled to, or null when SaaS is not the authority
+     * here.
+     *
+     * <p>Only consulted when no licence is installed. Null covers three indistinguishable cases
+     * that all fall through to the grandfathered limit: the instance is not linked, SaaS has never
+     * answered, or it answered with no user limit — which is also what an older SaaS sends.
+     *
+     * <p>When SaaS is merely unreachable, {@link EntitlementCache} keeps serving the freshest
+     * snapshot it has, so a linked instance holds its last known allowance rather than losing it.
+     */
+    private Integer linkedTeamAllowance() {
+        EntitlementCache cache = entitlementCache.getIfAvailable();
+        if (cache == null) {
+            return null;
+        }
+        return cache.current().map(InstanceEntitlement::licensedUsers).orElse(null);
     }
 
     /**
