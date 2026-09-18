@@ -656,9 +656,9 @@ public class ExceptionUtils {
         return new IllegalArgumentException(message);
     }
 
-    public static IllegalArgumentException createFileNullOrEmptyException() {
+    public static FileValidationException createFileNullOrEmptyException() {
         String message = getMessage(ErrorCode.FILE_NULL_OR_EMPTY);
-        return new IllegalArgumentException(message);
+        return new FileValidationException(message, ErrorCode.FILE_NULL_OR_EMPTY.getCode());
     }
 
     public static IllegalArgumentException createFileNoNameException() {
@@ -699,6 +699,41 @@ public class ExceptionUtils {
                         ErrorCode.OCR_PROCESSING_FAILED.getDefaultMessage(),
                         returnCode);
         return new IOException(message);
+    }
+
+    /**
+     * A document failed the compliance standard it was checked against. Carries an error code so
+     * the policy review surface can name the failure instead of recording it as unrecognised.
+     *
+     * @param detail the whole sentence, already naming the standard and the failing rules
+     */
+    public static ComplianceNotMetException createComplianceNotMetException(String detail) {
+        String message = getMessage(ErrorCode.COMPLIANCE_NOT_MET, detail);
+        return new ComplianceNotMetException(message, ErrorCode.COMPLIANCE_NOT_MET.getCode());
+    }
+
+    /** Raised once every available repair tool has tried the document and declined it. */
+    public static PdfUnrepairableException createPdfUnrepairableException() {
+        return new PdfUnrepairableException(
+                getMessage(ErrorCode.PDF_UNREPAIRABLE), ErrorCode.PDF_UNREPAIRABLE.getCode());
+    }
+
+    /**
+     * A step refused its input on type alone, before running.
+     *
+     * @param actual the extension, never the filename: this message is persisted on a failure
+     *     record, which holds no document names
+     */
+    public static StepInputTypeException createStepInputTypeException(
+            String operation, List<String> accepted, String actual) {
+        String message =
+                getMessage(
+                        ErrorCode.STEP_INPUT_TYPE_REJECTED.getMessageKey(),
+                        ErrorCode.STEP_INPUT_TYPE_REJECTED.getDefaultMessage(),
+                        operation,
+                        accepted,
+                        actual);
+        return new StepInputTypeException(message, ErrorCode.STEP_INPUT_TYPE_REJECTED.getCode());
     }
 
     /** Create system requirement exceptions. */
@@ -1035,16 +1070,18 @@ public class ExceptionUtils {
     public static IOException handlePdfException(IOException e, String context) {
         requireNonNull(e, "exception");
 
-        if (PdfErrorUtils.isCorruptedPdfError(e)) {
-            return createPdfCorruptedException(context, e);
+        // Most specific first: corruption's patterns cover almost anything PDFBox gives up on,
+        // so testing it earlier reported every document that would not decrypt as damaged.
+        if (isPasswordError(e)) {
+            return createPdfPasswordException(e);
         }
 
         if (isEncryptionError(e)) {
             return createPdfEncryptionException(e);
         }
 
-        if (isPasswordError(e)) {
-            return createPdfPasswordException(e);
+        if (PdfErrorUtils.isCorruptedPdfError(e)) {
+            return createPdfCorruptedException(context, e);
         }
 
         return e; // Return original exception if no specific handling needed
@@ -1216,6 +1253,24 @@ public class ExceptionUtils {
                 "error.invalidComparator",
                 "Invalid comparator format: only 'greater', 'equal', and 'less' are supported"),
 
+        // Compliance errors. The caller builds the whole sentence: only it knows the standard,
+        // profile and failing rules.
+        COMPLIANCE_NOT_MET("E074", "error.complianceNotMet", "{0}"),
+
+        // Every repair strategy declined it. Distinct from PDF_CORRUPTED, which says a document
+        // is damaged: this says the damage has already survived the tools that fix damage.
+        PDF_UNREPAIRABLE(
+                "E076",
+                "error.pdfUnrepairable",
+                "This document is damaged in a way the repair tools cannot fix."),
+
+        // Raised before a step runs, by whoever knows both what the step accepts and what it was
+        // handed. Distinct from PDF_NOT_PDF, which speaks only for steps that want a PDF.
+        STEP_INPUT_TYPE_REJECTED(
+                "E075",
+                "error.stepInputTypeRejected",
+                "Step {0} accepts {1} but received a ''{2}'' file"),
+
         // System errors
         MD5_ALGORITHM("E080", "error.md5Algorithm", "MD5 algorithm not available"),
         OUT_OF_MEMORY_DPI(
@@ -1274,6 +1329,27 @@ public class ExceptionUtils {
     public static class GhostscriptException extends BaseAppException {
         public GhostscriptException(String message, Throwable cause, String errorCode) {
             super(message, cause, errorCode);
+        }
+    }
+
+    /** Exception thrown when a document fails a compliance standard it was checked against. */
+    public static class ComplianceNotMetException extends BaseAppException {
+        public ComplianceNotMetException(String message, String errorCode) {
+            super(message, null, errorCode);
+        }
+    }
+
+    /** Exception thrown when every repair strategy has declined a damaged document. */
+    public static class PdfUnrepairableException extends BaseAppException {
+        public PdfUnrepairableException(String message, String errorCode) {
+            super(message, null, errorCode);
+        }
+    }
+
+    /** Exception thrown when a step is handed a file of a type it does not accept. */
+    public static class StepInputTypeException extends BaseAppException {
+        public StepInputTypeException(String message, String errorCode) {
+            super(message, null, errorCode);
         }
     }
 
@@ -1338,6 +1414,16 @@ public class ExceptionUtils {
         protected BaseValidationException(String message, Throwable cause, String errorCode) {
             super(message, cause);
             this.errorCode = errorCode;
+        }
+    }
+
+    /**
+     * A submitted file that fails a validation its caller could correct, such as arriving empty.
+     * Coded, so the refusal reaches a failure record rather than the handler that attaches none.
+     */
+    public static class FileValidationException extends BaseValidationException {
+        public FileValidationException(String message, String errorCode) {
+            super(message, errorCode);
         }
     }
 

@@ -12,6 +12,8 @@ vars:
   DEV_LABEL:
     sh: >-
       {{if eq OS "windows"}}powershell -NoProfile -Command '$root = git rev-parse --show-toplevel 2>$null; if (-not $root) { $root = (Get-Location).Path }; Split-Path -Leaf $root'{{else}}basename "$(git rev-parse --show-toplevel 2>/dev/null || pwd)"{{end}}
+  VITEST_JOBS: '{{if .STIRLING_CHECK_JOBS}} --maxWorkers={{.STIRLING_CHECK_JOBS}}{{end}}'
+  OX_THREADS: '{{if .STIRLING_CHECK_JOBS}} --threads={{.STIRLING_CHECK_JOBS}}{{end}}'
 
 tasks:
   install:
@@ -239,6 +241,14 @@ tasks:
     cmds:
       - npx vite build editor --mode desktop
 
+  build:desktop:e2e:
+    desc: "Desktop build in its own outDir, for the disk-link E2E project"
+    deps:
+      - task: prepare
+        vars: { MODE: desktop }
+    cmds:
+      - npx vite build editor --mode desktop --outDir dist-desktop
+
   build:prototypes:
     desc: "Build for prototypes mode"
     deps: [prepare]
@@ -342,7 +352,20 @@ tasks:
     cmds:
       - task: lint:oxlint
       - task: lint:colors
+      - task: lint:icons
       - task: lint:css
+
+  lint:icons:
+    desc: "Enforce one icon system - no inline svg, no retired icon libraries"
+    deps: [install]
+    cmds:
+      - npx tsx editor/scripts/lint/icon-lint.mts
+
+  lint:unused-icons:
+    desc: "Report icons we draw ourselves that nothing renders"
+    deps: [install]
+    cmds:
+      - npx tsx editor/scripts/lint/icon-lint.mts unused
 
   lint:css:
     desc: "Lint stylesheets for duplicate selectors"
@@ -373,7 +396,7 @@ tasks:
     desc: "Run oxlint linting"
     deps: [install]
     cmds:
-      - npx oxlint --config oxlint.config.ts --max-warnings=0
+      - npx oxlint --config oxlint.config.ts --max-warnings=0{{.OX_THREADS}}
 
   lint:fix:
     desc: "Auto-fix lint issues"
@@ -391,7 +414,7 @@ tasks:
     desc: "Check code formatting"
     deps: [install]
     cmds:
-      - npx oxfmt --check .
+      - npx oxfmt --check .{{.OX_THREADS}}
 
   fix:
     desc: "Auto-fix lint and format"
@@ -535,7 +558,7 @@ tasks:
       COVERAGE: '{{.COVERAGE | default .CI | default "false"}}'
     cmds:
       - >
-        npx vitest run --root editor
+        npx vitest run --root editor{{.VITEST_JOBS}}
         {{if eq .COVERAGE "true"}}--coverage
         --coverage.provider=v8
         --coverage.reporter=text-summary
