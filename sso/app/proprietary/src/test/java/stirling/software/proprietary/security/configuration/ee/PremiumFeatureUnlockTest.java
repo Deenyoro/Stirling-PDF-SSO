@@ -46,7 +46,8 @@ class PremiumFeatureUnlockTest {
         new PremiumFeatureUnlock(props).enableAllPremiumFeatures();
 
         Premium premium = props.getPremium();
-        assertFalse(premium.getProFeatures().isSsoAutoLogin(), "sso auto-login left off");
+        // Upstream moved ssoAutoLogin from premium.proFeatures to security (#8137).
+        assertFalse(props.getSecurity().isSsoAutoLogin(), "sso auto-login left off");
         assertFalse(premium.getProFeatures().isDatabase(), "custom database left off");
         assertFalse(
                 premium.getProFeatures().getGoogleDrive().isEnabled(), "google drive left off");

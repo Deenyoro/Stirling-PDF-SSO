@@ -104,7 +104,7 @@ sso/
 Toggles that need extra configuration are left **off** so a fresh deploy boots
 cleanly — enable them in settings once configured:
 `proFeatures.googleDrive` (API keys), `proFeatures.database` (external DB),
-`proFeatures.ssoAutoLogin` (redirects past the login page).
+`security.ssoAutoLogin` (redirects past the login page; moved out of `premium.proFeatures` upstream).
 
 All of these defaults are enforced at **runtime** by `PremiumFeatureUnlock`
 (`@PostConstruct`), so there is intentionally **no patch to `settings.yml.template`**.
