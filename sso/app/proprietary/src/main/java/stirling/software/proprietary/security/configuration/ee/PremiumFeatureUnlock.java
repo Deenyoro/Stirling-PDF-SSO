@@ -25,7 +25,7 @@ import stirling.software.common.model.ApplicationProperties.Premium;
  * <ul>
  *   <li>{@code premium.proFeatures.googleDrive} — needs a Google API client id / api key
  *   <li>{@code premium.proFeatures.database} — needs an external datasource connection
- *   <li>{@code premium.proFeatures.ssoAutoLogin} — redirects past the login page; only useful once
+ *   <li>{@code security.ssoAutoLogin} — redirects past the login page; only useful once
  *       an SSO provider is configured
  * </ul>
  *

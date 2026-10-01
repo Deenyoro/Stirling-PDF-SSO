@@ -70,7 +70,8 @@ sso/
 │   ├── 0001-keygenlicenseverifier-enterprise-bypass.patch   # REQUIRED: verifyLicense() -> ENTERPRISE, no keygen.sh call
 │   ├── 0002-licensekeychecker-grant-enterprise.patch        # REQUIRED: no key -> ENTERPRISE; @DependsOn ordering
 │   └── optional/                                            # best-effort: not in the runtime image, never fails the build
-│       └── 0003-licensekeycheckertest-expectations.patch    # test sources updated to the new behaviour
+│       ├── 0003-licensekeycheckertest-expectations.patch    # test sources updated to the new behaviour
+│       └── 0004-keygenlicenseverifiertest-expectations.patch # bad keys with premium on -> ENTERPRISE (patch 0001)
 ├── ci-patches/                     # diffs applied to .github/workflows/ (applied LOCALLY, not in Docker)
 │   ├── 0001-runner-pick-force-fork-on-non-upstream.patch    # _runner-pick.yml: force is_fork=true on the fork
 │   ├── 0002-push-docker-skip-on-fork.patch                  # push-docker.yml: skip on non-upstream repos
@@ -86,6 +87,7 @@ sso/
 │   ├── verify-patches.sh           # LOCAL/CI: dry-run all patches; reports what needs regenerating
 │   ├── check-upstream-contract.sh  # LOCAL/CI: do the upstream symbols the overlay compiles against still exist?
 │   ├── check-sync-safety.sh        # LOCAL/CI: will the next sync conflict? (merge simulation + footprint)
+│   ├── smoke-test-image.sh         # CI: boot the built image (login + OIDC) and check unlock + SSO redirect
 │   └── sync-upstream.sh            # LOCAL: one command — stamp recovery ref, merge, re-apply CI, verify
 ├── upstream-contract.tsv           # upstream symbols sso/app/ depends on (checked by check-upstream-contract.sh)
 └── deploy/
@@ -103,7 +105,7 @@ sso/
 Toggles that need extra configuration are left **off** so a fresh deploy boots
 cleanly — enable them in settings once configured:
 `proFeatures.googleDrive` (API keys), `proFeatures.database` (external DB),
-`proFeatures.ssoAutoLogin` (redirects past the login page).
+`security.ssoAutoLogin` (redirects past the login page; moved out of `premium.proFeatures` upstream).
 
 All of these defaults are enforced at **runtime** by `PremiumFeatureUnlock`
 (`@PostConstruct`), so there is intentionally **no patch to `settings.yml.template`**.
@@ -125,6 +127,27 @@ sso/                                    all custom code, patches and tooling
 Dockerfile                              fork-only (upstream ships docker/*)
 .github/workflows/sso-docker-build.yml  fork-only
 ```
+
+The root `Dockerfile` is a near-verbatim copy of upstream's
+`docker/embedded/Dockerfile` plus the overlay block. It never conflicts, but it
+can go **stale**: upstream bumps the base image (LibreOffice sandbox, office
+user), toolchain pins and runtime layout there. After every sync run
+`diff docker/embedded/Dockerfile Dockerfile`; the only differences should be the
+header, `patch rsync` on the build stage's apt line, the "SSO overlay" block and
+the image labels.
+
+### What GitLab CI checks on every main push
+
+1. `verify-patches` — every patch still applies; the upstream symbols the
+   overlay compiles against still exist.
+2. `backend-tests` — upstream's backend build + unit tests (flavor
+   `proprietary`) on the overlaid tree, including `PremiumFeatureUnlockTest`
+   and the patched license tests.
+3. `build` — builds the image, then `sso/script/smoke-test-image.sh` boots it
+   with login + Authentik OIDC and no license key, and asserts the unlock, the
+   ENTERPRISE license, the OIDC registration, the SSO redirect, that admin APIs
+   refuse anonymous calls, and that the LibreOffice sandbox launcher is present.
+   Only then are the tags pushed.
 
 A merge conflict requires both sides to have changed the same lines of the same
 file. Since the fork shares **zero lines** with upstream, `git merge

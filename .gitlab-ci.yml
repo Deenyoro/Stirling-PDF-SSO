@@ -5,6 +5,10 @@
 # belongs in a GitLab build. CI only VERIFIES the patches here — the fork
 # already ships sso/script/verify-patches.sh for exactly that.
 #
+# Gates, in order: patches + upstream contract (verify-patches), backend unit
+# tests on the overlaid tree (backend-tests), image build, then a runtime smoke
+# test of the built image (sso/script/smoke-test-image.sh) before it is pushed.
+#
 # The Dockerfile applies the overlay and patches itself, so the build context
 # is the repo as committed.
 
@@ -32,12 +36,58 @@ verify-patches:
     - bash sso/script/verify-patches.sh
     - bash sso/script/check-upstream-contract.sh
 
+# Backend unit tests on the overlaid tree: the overlay's own
+# PremiumFeatureUnlockTest, the patched LicenseKeyChecker/KeygenLicenseVerifier
+# tests, and upstream's whole common/core/proprietary suite (security, OAuth2,
+# SAML, session, user management). Same command as upstream's backend-build.yml
+# (`./gradlew build -PnoSpotless`, flavor=proprietary), minus the frontend.
+backend-tests:
+  stage: test
+  tags: [linux]
+  image: gradle:9.7.1-jdk25@sha256:e06837018d077ee7f1218e53499425ca7615702ad58856d980c154caa17eb093
+  needs: [verify-patches]
+  timeout: 2h
+  variables:
+    STIRLING_FLAVOR: proprietary
+    GRADLE_USER_HOME: /work/gradle-home
+    GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4g -XX:+UseG1GC"
+    JDK_JAVA_OPTIONS: >-
+      --add-exports=jdk.compiler/com.sun.tools.javac.api=ALL-UNNAMED
+      --add-exports=jdk.compiler/com.sun.tools.javac.file=ALL-UNNAMED
+      --add-exports=jdk.compiler/com.sun.tools.javac.parser=ALL-UNNAMED
+      --add-exports=jdk.compiler/com.sun.tools.javac.tree=ALL-UNNAMED
+      --add-exports=jdk.compiler/com.sun.tools.javac.util=ALL-UNNAMED
+    KUBERNETES_CPU_LIMIT: "8"
+    KUBERNETES_MEMORY_LIMIT: 16Gi
+  script:
+    - apt-get update -qq && apt-get install -y -qq --no-install-recommends patch rsync >/dev/null
+    # Run outside /builds: upstream's TaggedContentExtractorRealFilesTest skips
+    # every path containing "/build" when it walks the repo for its PDF corpus,
+    # so under GitLab's /builds/<group>/<project> it would find nothing.
+    - mkdir -p /work/src && rsync -a ./ /work/src/
+    - cd /work/src
+    - bash sso/script/apply-overlay.sh
+    - bash sso/script/apply-patches.sh
+    # The overlay test must be in the tree, or this job proves nothing about it.
+    - test -f app/proprietary/src/test/java/stirling/software/proprietary/security/configuration/ee/PremiumFeatureUnlockTest.java
+    # AppConfig#machineType reports "Kubernetes" when KUBERNETES_SERVICE_HOST is
+    # set, which the runner pod always has; upstream's tests expect a plain host.
+    - rc=0; env -u KUBERNETES_SERVICE_HOST -u KUBERNETES_SERVICE_PORT gradle build -PnoSpotless -x sonarqube --no-daemon --continue || rc=$?
+    - for m in common core proprietary; do mkdir -p "$CI_PROJECT_DIR/app/$m/build/test-results"; rsync -a "app/$m/build/test-results/" "$CI_PROJECT_DIR/app/$m/build/test-results/" || true; done
+    - exit $rc
+  artifacts:
+    when: always
+    expire_in: 14 days
+    reports:
+      junit:
+        - app/*/build/test-results/test/TEST-*.xml
+
 build:
   stage: build
   tags: [linux]
   image: docker:27
   services: ["docker:27-dind"]
-  needs: [verify-patches]
+  needs: [verify-patches, backend-tests]
   timeout: 3h
   variables:
     DOCKER_HOST: tcp://docker:2376
@@ -61,6 +111,9 @@ build:
         --label org.opencontainers.image.source="$CI_PROJECT_URL" \
         --label org.opencontainers.image.revision="$CI_COMMIT_SHA" \
         -t stirling-pdf-sso:candidate .
+    # Boot the image like the cluster does (login + Authentik OIDC, no license
+    # key) and check the unlock and the SSO redirect before anything is pushed.
+    - sh sso/script/smoke-test-image.sh stirling-pdf-sso:candidate
     - |
       if [ "${DOCKER_PUSH:-true}" != "true" ]; then
         echo "DOCKER_PUSH=$DOCKER_PUSH: built but not published"
