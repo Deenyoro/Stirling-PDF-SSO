@@ -70,7 +70,8 @@ sso/
 │   ├── 0001-keygenlicenseverifier-enterprise-bypass.patch   # REQUIRED: verifyLicense() -> ENTERPRISE, no keygen.sh call
 │   ├── 0002-licensekeychecker-grant-enterprise.patch        # REQUIRED: no key -> ENTERPRISE; @DependsOn ordering
 │   └── optional/                                            # best-effort: not in the runtime image, never fails the build
-│       └── 0003-licensekeycheckertest-expectations.patch    # test sources updated to the new behaviour
+│       ├── 0003-licensekeycheckertest-expectations.patch    # test sources updated to the new behaviour
+│       └── 0004-keygenlicenseverifiertest-expectations.patch # bad keys with premium on -> ENTERPRISE (patch 0001)
 ├── ci-patches/                     # diffs applied to .github/workflows/ (applied LOCALLY, not in Docker)
 │   ├── 0001-runner-pick-force-fork-on-non-upstream.patch    # _runner-pick.yml: force is_fork=true on the fork
 │   ├── 0002-push-docker-skip-on-fork.patch                  # push-docker.yml: skip on non-upstream repos
