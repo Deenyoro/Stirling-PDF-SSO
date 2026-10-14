@@ -10,20 +10,22 @@
 # in step with the upstream code being built. After a sync, compare with:
 #   diff docker/embedded/Dockerfile Dockerfile
 # The only intended differences are this header, `patch rsync` on the build
-# stage's apt line, the "SSO overlay" block, and the image labels.
+# stage's apt line, the "SSO overlay" block, the VITE_* handling (see the
+# comment there: this image deliberately ships with no Stirling account link),
+# and the image labels.
 #
 # Build:
 #   docker build -t stirling-pdf-sso .
 # Run (see sso/deploy/ for a full compose stack):
 #   docker run -p 8080:8080 stirling-pdf-sso
 
-ARG BASE_VERSION=1.0.6@sha256:678d67fd8c80d625b54e39ced1e712cc0dcfee0601c507ac2a67d0cc8a52a696
+ARG BASE_VERSION=1.1.0@sha256:3bcc8e10d5319b7c0550cf41b96f6980e1552c974dc37aba462b74fa17c4b5e4
 ARG BASE_IMAGE=stirlingtools/stirling-pdf-base:${BASE_VERSION}
 
 # Stage 1: Build the Java application and frontend
 FROM gradle:9.7.1-jdk25@sha256:e06837018d077ee7f1218e53499425ca7615702ad58856d980c154caa17eb093 AS app-build
 
-ARG TASK_VERSION=3.53.1
+ARG TASK_VERSION=3.54.0
 ARG NODE_MAJOR_VERSION=24
 RUN apt-get update \
     && apt-get install -y --no-install-recommends curl ca-certificates patch rsync \
@@ -84,15 +86,18 @@ RUN rm -rf sso
 # Proprietary flavour compiles the Enterprise/SSO module; the runtime then
 # auto-activates the "security" Spring profile because SecurityConfiguration is
 # present on the classpath (see SPDFApplication#getActiveProfile).
-ARG PROTOTYPES_BUILD=false
 ARG STIRLING_FLAVOR=proprietary
 ENV STIRLING_FLAVOR=${STIRLING_FLAVOR}
 # Include the processor (admin portal) in the bundled editor; false leaves it out.
 ARG BUILD_PORTAL=true
 
 # Which Stirling account the portal connects to. Build-time because Vite inlines VITE_* into the
-# bundle; there is no runtime override. Empty leaves the committed .env.proprietary defaults, which
-# is what an ordinary image wants: no Stirling account and no connect flow. The publishable key is
+# bundle; there is no runtime override. Upstream's committed frontend .env defaults now point at
+# production Stirling (#8338), so a stock upstream image offers the "link your Stirling account"
+# flow. This fork does not want that: every ARG reaches RUN as an environment variable, empty
+# ones included, and Vite lets a VITE_* in process.env beat the .env files, so leaving these empty
+# blanks the committed defaults and the frontend reports SaaS as not configured. Upstream unsets
+# the empty ones to keep its defaults; this file intentionally does not. The publishable key is
 # client-side by design, not a secret. Pass the URL and the key from the same Supabase project or
 # the browser accepts the pair and Supabase rejects it, which surfaces later as "session expired".
 ARG VITE_SUPABASE_URL=""
@@ -101,8 +106,8 @@ ARG VITE_SAAS_API_URL=""
 
 # Bundle only the JPDFium native for this image's target arch.
 ARG TARGETARCH
-# Exported only when non-empty: Vite reads process.env ahead of the .env files, so exporting an
-# empty value would blank the committed default rather than fall back to it.
+# Exported only when non-empty; an empty ARG stays in the environment and blanks the committed
+# default on purpose (see above).
 RUN JPDFIUM_PLATFORM="$([ "$TARGETARCH" = arm64 ] && echo linux-arm64 || echo linux-x64)" && \
     if [ -n "${VITE_SUPABASE_URL}" ]; then export VITE_SUPABASE_URL="${VITE_SUPABASE_URL}"; fi; \
     if [ -n "${VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY}" ]; then export VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY="${VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY}"; fi; \
@@ -112,7 +117,6 @@ RUN JPDFIUM_PLATFORM="$([ "$TARGETARCH" = arm64 ] && echo linux-arm64 || echo li
       -PbuildWithFrontend=true \
       -PbuildWithPortal=${BUILD_PORTAL} \
       -PjpdfiumPlatforms="$JPDFIUM_PLATFORM" \
-      -PprototypesMode=${PROTOTYPES_BUILD} \
       -PbundleOnnxRuntime=true \
       -x spotlessApply -x spotlessCheck -x test -x sonarqube \
       --no-daemon
