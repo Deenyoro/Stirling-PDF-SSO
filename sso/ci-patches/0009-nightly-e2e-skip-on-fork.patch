@@ -1,5 +1,5 @@
 diff --git a/.github/workflows/nightly.yml b/.github/workflows/nightly.yml
-index 63484ee7c..1056c2075 100644
+index e80543bc3..23f74e232 100644
 --- a/.github/workflows/nightly.yml
 +++ b/.github/workflows/nightly.yml
 @@ -19,6 +19,10 @@ permissions:
@@ -10,10 +10,10 @@ index 63484ee7c..1056c2075 100644
 +    # desktop cache are upstream infrastructure; the fork ships no desktop app
 +    # and builds its image from the Dockerfile. Skipped on non-upstream repos.
 +    if: github.repository == 'Stirling-Tools/Stirling-PDF'
-     name: Playwright (chromium + firefox + webkit)
-     runs-on: ubuntu-latest
-     steps:
-@@ -64,6 +68,10 @@ jobs:
+     name: Playwright (stubbed, all browsers)
+     permissions:
+       contents: read
+@@ -30,6 +34,10 @@ jobs:
    # the story itself — a shared component, a theme token — still surfaces within
    # a day.
    a11y-all-stories:
@@ -24,25 +24,38 @@ index 63484ee7c..1056c2075 100644
      name: a11y (every story)
      strategy:
        fail-fast: false
-@@ -113,6 +121,10 @@ jobs:
+@@ -79,8 +87,11 @@ jobs:
    # testing anything, and Actions scopes a cache written on a PR branch to that PR
    # alone, so a PR run costs three platform builds and produces nothing reusable.
    warm-tauri-cache:
 +    # Upstream-only: nightly cross-browser E2E, the a11y sweep and the Tauri
 +    # desktop cache are upstream infrastructure; the fork ships no desktop app
 +    # and builds its image from the Dockerfile. Skipped on non-upstream repos.
-+    if: github.repository == 'Stirling-Tools/Stirling-PDF'
      name: Warm Tauri Rust cache
-     if: github.event_name == 'schedule' || github.ref == 'refs/heads/main'
+-    if: github.event_name == 'schedule' || github.ref == 'refs/heads/main'
++    if: github.repository == 'Stirling-Tools/Stirling-PDF' && (github.event_name == 'schedule' || github.ref == 'refs/heads/main')
      permissions:
-@@ -127,6 +139,10 @@ jobs:
+       contents: read
+       pull-requests: write
+@@ -93,6 +104,9 @@ jobs:
    # Runs the @nightly tag (conversion scenarios) plus a 10-shard concurrency run
    # of every other feature.
    cucumber-nightly:
 +    # Upstream-only: nightly cross-browser E2E, the a11y sweep and the Tauri
 +    # desktop cache are upstream infrastructure; the fork ships no desktop app
 +    # and builds its image from the Dockerfile. Skipped on non-upstream repos.
-+    if: github.repository == 'Stirling-Tools/Stirling-PDF'
      environment:
        name: ci-unsigned
        deployment: false
+@@ -100,8 +114,9 @@ jobs:
+     runs-on: ubuntu-latest
+     # Fork pull requests get no MAVEN_* secrets, so the image build cannot work.
+     if: >-
+-      github.event_name != 'pull_request' ||
+-      github.event.pull_request.head.repo.full_name == github.repository
++      github.repository == 'Stirling-Tools/Stirling-PDF' &&
++      (github.event_name != 'pull_request' ||
++       github.event.pull_request.head.repo.full_name == github.repository)
+     permissions:
+       contents: read
+     steps:

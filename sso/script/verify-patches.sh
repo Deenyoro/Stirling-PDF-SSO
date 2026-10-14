@@ -100,12 +100,30 @@ if command -v python3 > /dev/null 2>&1 && python3 -c 'import yaml' > /dev/null 2
     tgt="$(grep -m1 '^--- a/' "${p}" | sed 's|--- a/||')"
     [ -n "${tgt}" ] && [ -e "${SCRATCH}/${tgt}" ] || continue
     patch -p1 -F3 --ignore-whitespace --directory="${SCRATCH}" < "${p}" > /dev/null 2>&1 || true
-    if python3 -c "import yaml,sys; yaml.safe_load(open(sys.argv[1]))" "${SCRATCH}/${tgt}" 2>/dev/null; then
+    # PyYAML silently keeps the last of two identical keys; GitHub refuses the
+    # workflow. A patch that inserts a job-level `if:` into a job upstream has
+    # since given its own `if:` is exactly that case, so duplicates fail here.
+    if python3 - "${SCRATCH}/${tgt}" <<'PY' 2>/dev/null; then
+import sys, yaml
+class Strict(yaml.SafeLoader):
+    pass
+def mapping(loader, node):
+    seen = set()
+    for key_node, _ in node.value:
+        key = loader.construct_object(key_node)
+        if key in seen:
+            raise ValueError("duplicate key %r at line %d" % (key, key_node.start_mark.line + 1))
+        seen.add(key)
+    return loader.construct_mapping(node)
+Strict.add_constructor(yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, mapping)
+with open(sys.argv[1]) as fh:
+    yaml.load(fh, Loader=Strict)
+PY
       echo "  ok (valid yaml)       ci-patches/${name}"
     else
       echo "  FAIL (breaks yaml)    ci-patches/${name} -> ${tgt}"
-      echo "                        the patch applies but the result will not parse;"
-      echo "                        GitHub will refuse to run that workflow."
+      echo "                        the patch applies but the result will not parse"
+      echo "                        (or repeats a key); GitHub will refuse to run that workflow."
       YAML_FAIL=$((YAML_FAIL + 1))
     fi
   done

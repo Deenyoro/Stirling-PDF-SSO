@@ -83,12 +83,21 @@ echo "SSO smoke: app up after ~${i}s"
 LOGS="$(docker logs "$NAME" 2>&1)"
 has() { printf '%s\n' "$LOGS" | grep -qF -- "$1"; }
 
-has "Premium/Enterprise features unlocked" \
-  && ok "PremiumFeatureUnlock ran" || bad "PremiumFeatureUnlock did not run"
-has "granting Enterprise" \
-  && ok "license resolved to ENTERPRISE without a key" || bad "license was not granted as ENTERPRISE"
-has "Initialised OIDC OAuth2 provider: registrationId='${PROVIDER}'" \
-  && ok "OIDC registration '${PROVIDER}' built from issuer discovery" || bad "OIDC registration '${PROVIDER}' missing"
+if has "Premium/Enterprise features unlocked"; then
+  ok "PremiumFeatureUnlock ran"
+else
+  bad "PremiumFeatureUnlock did not run"
+fi
+if has "granting Enterprise"; then
+  ok "license resolved to ENTERPRISE without a key"
+else
+  bad "license was not granted as ENTERPRISE"
+fi
+if has "Initialised OIDC OAuth2 provider: registrationId='${PROVIDER}'"; then
+  ok "OIDC registration '${PROVIDER}' built from issuer discovery"
+else
+  bad "OIDC registration '${PROVIDER}' missing"
+fi
 if has "APPLICATION FAILED TO START"; then bad "Spring reported APPLICATION FAILED TO START"; fi
 if has "sandbox launcher is not in this image"; then
   bad "LibreOffice sandbox launcher missing (base image too old?)"

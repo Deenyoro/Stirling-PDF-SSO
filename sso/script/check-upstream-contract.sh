@@ -29,7 +29,7 @@ if [ ! -f "${CONTRACT}" ]; then
   exit 0
 fi
 
-cd "${REPO_ROOT}"
+cd "${REPO_ROOT}" || exit 1
 
 OK=0
 BROKEN=0
