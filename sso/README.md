@@ -125,7 +125,9 @@ files upstream does not have:
 ```
 sso/                                    all custom code, patches and tooling
 Dockerfile                              fork-only (upstream ships docker/*)
+.gitlab-ci.yml                          fork-only (builds and publishes the image)
 .github/workflows/sso-docker-build.yml  fork-only
+.github/workflows/upstream-auto-sync.yml fork-only
 ```
 
 The root `Dockerfile` is a near-verbatim copy of upstream's

@@ -19,7 +19,9 @@ set -uo pipefail
 #
 #       sso/                              all custom code, patches, tooling
 #       Dockerfile                        fork-only (upstream ships docker/*)
+#       .gitlab-ci.yml                    fork-only (image build)
 #       .github/workflows/sso-docker-build.yml
+#       .github/workflows/upstream-auto-sync.yml
 #
 #   Upstream files are left BYTE-FOR-BYTE PRISTINE in git. Changes to them
 #   live as unified diffs under sso/patches/ (applied inside the Docker
@@ -49,7 +51,7 @@ UPSTREAM_REF="${UPSTREAM_REMOTE}/${UPSTREAM_BRANCH}"
 
 # Paths the fork owns outright. Everything here is a NEW file that upstream
 # does not track, so it can never collide during a merge.
-FORK_OWNED=("sso/" "Dockerfile" ".github/workflows/sso-docker-build.yml")
+FORK_OWNED=("sso/" "Dockerfile" ".gitlab-ci.yml" ".github/workflows/sso-docker-build.yml" ".github/workflows/upstream-auto-sync.yml")
 
 FETCH=0
 for arg in "$@"; do
