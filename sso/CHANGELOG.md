@@ -5,6 +5,20 @@ Stirling-PDF release the tree is based on, plus the fork's own revision.
 Images are published as `ghcr.io/deenyoro/stirling-pdf-sso:<yyyy.mm.dd>-<sha8>`
 (also `sha-<sha>` and `latest`).
 
+## v3.2.1-sso.2 — 2026-10-28
+
+- Automatic PDF metadata is no longer switched on at every start. With it on,
+  every processed PDF had its Author replaced by the signed-in username (an
+  email address with OIDC). It now follows
+  `premium.proFeatures.customMetadata.autoUpdateMetadata` in settings.yml,
+  which is off by default, so PDFs keep their original Author.
+- Audit logging is no longer forced on either. It follows
+  `premium.enterpriseFeatures.audit.enabled` in settings.yml, which is on by
+  default, so nothing changes unless you turn it off there.
+- `sso/deploy/docker-compose.yml` has no default admin password any more:
+  `INITIAL_ADMIN_PASSWORD` must be set or compose refuses to start. Added the
+  `sso/deploy/.env.example` the README refers to.
+
 ## v3.2.1-sso.1 — 2026-10-23
 
 - Synced with upstream Stirling-PDF 3.2.1 (latest stable, 2026-10-21) plus
