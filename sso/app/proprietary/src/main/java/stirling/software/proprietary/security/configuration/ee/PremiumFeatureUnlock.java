@@ -25,8 +25,11 @@ import stirling.software.common.model.ApplicationProperties.Premium;
  * <ul>
  *   <li>{@code premium.proFeatures.googleDrive} — needs a Google API client id / api key
  *   <li>{@code premium.proFeatures.database} — needs an external datasource connection
- *   <li>{@code security.ssoAutoLogin} — redirects past the login page; only useful once
- *       an SSO provider is configured
+ *   <li>{@code security.ssoAutoLogin} — redirects past the login page; only useful once an SSO
+ *       provider is configured
+ *   <li>{@code premium.proFeatures.customMetadata.autoUpdateMetadata} — overwrites the Author of
+ *       every processed PDF with the signed-in username, so it stays as settings.yml says (off by
+ *       default)
  * </ul>
  *
  * <p>{@link LicenseKeyChecker} declares {@code @DependsOn("premiumFeatureUnlock")} so the master
@@ -48,8 +51,8 @@ public class PremiumFeatureUnlock {
 
         var enterprise = premium.getEnterpriseFeatures();
 
-        // Audit logging (also requires the Enterprise tier, which this build grants).
-        enterprise.getAudit().setEnabled(true);
+        // Audit logging is left to settings.yml (premium.enterpriseFeatures.audit.enabled, on by
+        // default); it only needs the Enterprise tier, which this build grants.
 
         // Persistent metrics.
         enterprise.getPersistentMetrics().setEnabled(true);
@@ -63,9 +66,6 @@ public class PremiumFeatureUnlock {
         notifications.getBackups().setFailed(true);
         notifications.getImports().setSuccessful(true);
         notifications.getImports().setFailed(true);
-
-        // Automatic PDF metadata stamping.
-        premium.getProFeatures().getCustomMetadata().setAutoUpdateMetadata(true);
 
         log.info(
                 "Premium/Enterprise features unlocked — running as ENTERPRISE tier with no license"

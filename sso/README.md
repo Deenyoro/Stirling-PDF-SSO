@@ -99,8 +99,14 @@ sso/
 
 - **OAuth2 / OIDC SSO** (was already free) and **SAML2 SSO** (was paywalled).
 - **License tier** reported as `ENTERPRISE` (`runningProOrHigher` / `runningEE` true).
-- Self-contained features turned on automatically: audit logging, persistent
-  metrics, automatic PDF metadata, DB backup/import notifications.
+- Self-contained features turned on automatically: persistent metrics and
+  DB backup/import notifications. Audit logging works (it needs the Enterprise
+  tier) and follows `premium.enterpriseFeatures.audit.enabled` in settings.yml,
+  which is on by default.
+- Automatic PDF metadata (`premium.proFeatures.customMetadata.autoUpdateMetadata`)
+  is **not** forced on: it replaces the Author of every processed PDF with the
+  signed-in username (an email address with OIDC), so it stays off unless you
+  enable it in settings.yml.
 
 Toggles that need extra configuration are left **off** so a fresh deploy boots
 cleanly — enable them in settings once configured:
@@ -274,7 +280,7 @@ into the licensing code) precisely so a sync almost never breaks.
 docker build -t stirling-pdf-sso .
 docker run -p 8080:8080 -e SECURITY_ENABLELOGIN=true stirling-pdf-sso
 # or the full stack:
-cp sso/deploy/.env.example sso/deploy/.env   # edit values
+cp sso/deploy/.env.example sso/deploy/.env   # edit values; INITIAL_ADMIN_PASSWORD is required
 docker compose --env-file sso/deploy/.env -f sso/deploy/docker-compose.yml up -d
 ```
 
