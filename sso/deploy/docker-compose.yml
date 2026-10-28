@@ -31,9 +31,11 @@ services:
       SECURITY_ENABLELOGIN: "true"
       # loginMethod: all | normal | oauth2 | saml2
       SECURITY_LOGINMETHOD: "all"
-      # First-boot admin account (change the password, then remove after setup).
+      # First-boot admin account. There is no default password: set
+      # INITIAL_ADMIN_PASSWORD (e.g. `openssl rand -base64 24`) in .env or the
+      # environment, or compose refuses to start. Change it after first login.
       SECURITY_INITIALLOGIN_USERNAME: "${INITIAL_ADMIN_USERNAME:-admin}"
-      SECURITY_INITIALLOGIN_PASSWORD: "${INITIAL_ADMIN_PASSWORD:-stirling}"
+      SECURITY_INITIALLOGIN_PASSWORD: "${INITIAL_ADMIN_PASSWORD:?set INITIAL_ADMIN_PASSWORD to a strong first-boot admin password}"
 
       SYSTEM_DEFAULTLOCALE: en-US
       SYSTEM_MAXFILESIZE: "100"
