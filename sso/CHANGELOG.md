@@ -5,6 +5,17 @@ Stirling-PDF release the tree is based on, plus the fork's own revision.
 Images are published as `ghcr.io/deenyoro/stirling-pdf-sso:<yyyy.mm.dd>-<sha8>`
 (also `sha-<sha>` and `latest`).
 
+## v3.3.0-sso.1 — 2026-11-14
+
+- Based on upstream Stirling-PDF 3.3.0 (`main` up to `ad38e38ce`), including
+  the 2026-11-06 and 2026-11-11 syncs that were not tagged, and the fork
+  Dockerfile now tracking upstream's embedded Dockerfile.
+- 19 new upstream commits: accessibility checking and tagging, PDF text
+  editor fixes, connected OneDrive/SharePoint/Google Drive accounts for
+  pipelines, bundled-only public fonts route.
+- All SSO patches apply exactly, CI patches apply, upstream contract 21/21,
+  sync safety SAFE.
+
 ## v3.2.1-sso.2 — 2026-10-28
 
 - Automatic PDF metadata is no longer switched on at every start. With it on,
