@@ -5,6 +5,24 @@ Stirling-PDF release the tree is based on, plus the fork's own revision.
 Images are published as `ghcr.io/deenyoro/stirling-pdf-sso:<yyyy.mm.dd>-<sha8>`
 (also `sha-<sha>` and `latest`).
 
+## v3.3.0-sso.2 — 2026-11-17
+
+- Synced with upstream `main` up to `c718a3707` (still upstream version 3.3.0):
+  31 new upstream commits. Among them: SCIM 2.0 user provisioning (off until
+  `security.scimToken` is set), an option to block changes to digitally signed
+  PDFs (`security.blockSignedPdfEdits`, off by default), server-provided fonts
+  and font-embedding fixes in the PDF text editor, custom page size in Scale
+  Pages, page numbers on rotated and cropped pages, and omitted PDF metadata
+  now preserved in background jobs.
+- Upstream removed the PostScript vector conversion endpoints
+  (`/convert/vector/pdf`, `/convert/pdf/vector`: PS/EPS/PCL/XPS).
+- Upstream changed the default of `storage.sharing.enabled` to `true`. An
+  existing `settings.yml` keeps its own value, and sharing still needs
+  `storage.enabled`.
+- No overlay change was needed: all SSO patches apply exactly, CI patches
+  apply, upstream contract 21/21, sync safety SAFE, and the root `Dockerfile`
+  still differs from upstream's embedded Dockerfile only by the SSO additions.
+
 ## v3.3.0-sso.1 — 2026-11-14
 
 - Based on upstream Stirling-PDF 3.3.0 (`main` up to `ad38e38ce`), including
