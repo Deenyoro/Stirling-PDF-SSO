@@ -1,4 +1,4 @@
-# Stirling-PDF SSO fork image, built on GitLab and mirrored to GHCR.
+# Stirling-PDF SSO fork image, built on GitLab and published to the GitLab registry only.
 #
 # Ported from .github/workflows/sso-docker-build.yml. The GitHub job disabled
 # upstream workflows and pushed refreshed patches back to the repo; neither
@@ -124,11 +124,4 @@ build:
         docker tag stirling-pdf-sso:candidate "$CI_REGISTRY_IMAGE:$t"
         docker push "$CI_REGISTRY_IMAGE:$t"
       done
-      if [ -n "$GHCR_TOKEN" ]; then
-        echo "$GHCR_TOKEN" | docker login -u "${GHCR_USER:-Deenyoro}" --password-stdin ghcr.io
-        for t in $(cat .tags); do
-          docker tag stirling-pdf-sso:candidate "ghcr.io/${GHCR_OWNER:-deenyoro}/stirling-pdf-sso:$t"
-          docker push "ghcr.io/${GHCR_OWNER:-deenyoro}/stirling-pdf-sso:$t"
-        done
-      fi
       echo "Published: $(cat .tags)"
