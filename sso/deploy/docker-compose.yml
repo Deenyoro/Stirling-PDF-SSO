@@ -13,7 +13,7 @@
 
 services:
   stirling-pdf-sso:
-    image: ${STIRLING_PDF_SSO_IMAGE:-ghcr.io/deenyoro/stirling-pdf-sso:latest}
+    image: ${STIRLING_PDF_SSO_IMAGE:-gitlabreg.kawa.link/dean/stirling-pdf-sso:latest}
     container_name: stirling-pdf-sso
     restart: unless-stopped
     ports:

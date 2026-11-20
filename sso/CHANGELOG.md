@@ -2,7 +2,7 @@
 
 Fork releases are tagged `v<upstream version>-sso.<n>`: the upstream
 Stirling-PDF release the tree is based on, plus the fork's own revision.
-Images are published as `ghcr.io/deenyoro/stirling-pdf-sso:<yyyy.mm.dd>-<sha8>`
+Images are published as `gitlabreg.kawa.link/dean/stirling-pdf-sso:<yyyy.mm.dd>-<sha8>`
 (also `sha-<sha>` and `latest`).
 
 ## v3.3.0-sso.2 — 2026-11-17
