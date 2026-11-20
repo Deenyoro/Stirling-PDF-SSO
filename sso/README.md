@@ -206,7 +206,7 @@ removes. `ci-patches/` is kept only for the case where a workflow must be
 git remote add upstream https://github.com/Stirling-Tools/Stirling-PDF.git   # once
 ./sso/script/check-sync-safety.sh --fetch   # optional: predict the merge first
 ./sso/script/sync-upstream.sh               # do it
-git push                                    # rebuilds & pushes the image to GHCR
+git push                                    # GitLab CI rebuilds and pushes the image
 ```
 
 `sync-upstream.sh`:
