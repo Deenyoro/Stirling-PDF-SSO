@@ -5,6 +5,22 @@ Stirling-PDF release the tree is based on, plus the fork's own revision.
 Images are published as `gitlabreg.kawa.link/dean/stirling-pdf-sso:<yyyy.mm.dd>-<sha8>`
 (also `sha-<sha>` and `latest`).
 
+## v3.5.0-sso.1 (2026-11-24)
+
+- Synced with upstream `main` up to `a8053654b` (upstream version 3.5.0):
+  37 new upstream commits. Among them: LibreOffice, Calibre, WeasyPrint and
+  OpenCV replaced by the built-in Stirling Office Convert (the old
+  `system.customPaths`/`processExecutor` LibreOffice settings are now unused),
+  editing text inside the viewer, accessibility tagging fixes, macOS keychain
+  and OS trust store signing (`useOSTrust`, off by default), and an
+  off-by-default Server license user-count reporter.
+- Root `Dockerfile`: added upstream's new `-XX:-UseBASE64Intrinsics` JVM flag,
+  so it again differs from upstream's embedded Dockerfile only by the SSO
+  additions. Base image unchanged (1.1.1).
+- No overlay change was needed: all SSO patches apply exactly, CI patches
+  apply, upstream contract 21/21, sync safety SAFE. Upstream's `DatabaseConfig`
+  change only adds the `serverregistration` package to the JPA scan.
+
 ## v3.3.0-sso.2 — 2026-11-17
 
 - Synced with upstream `main` up to `c718a3707` (still upstream version 3.3.0):
