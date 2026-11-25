@@ -77,8 +77,29 @@ import { ScaleCalibrationDialog } from "@editor/components/viewer/ScaleCalibrati
 import { usePolicyFileBadges } from "@editor/hooks/usePolicyFileBadges";
 import { alert } from "@editor/components/toast";
 import { useDamagedFileRepair } from "@editor/contexts/DamagedFileRepairContext";
+import { useViewerPageTool } from "@editor/contexts/viewer/ViewerPageTool";
+import { useIsMobile } from "@editor/hooks/useIsMobile";
+import "@editor/tools/pdfTextEditor/components/EditorTopBar.css";
+import {
+  PAGES_PAST_INSET_ATTR,
+  usePagesPastInset,
+} from "@editor/components/viewer/usePagesPastInset";
+import { shouldRefitOnResize } from "@editor/components/viewer/refitOnResize";
+import "@editor/components/viewer/viewerPages.css";
 
 // ──────────────────────────────────────────────────────────────────────────────
+
+/** Waits out the margin transition (0.3s) before refitting, so it fits the final width. */
+const FIT_WIDTH_SETTLE_MS = 350;
+
+/** The widest page the viewer has mounted in `area`, in CSS pixels; 0 when none. */
+function widestPage(area: HTMLElement): number {
+  let widest = 0;
+  for (const page of area.querySelectorAll("[data-page-index]")) {
+    widest = Math.max(widest, page.getBoundingClientRect().width);
+  }
+  return widest;
+}
 
 export interface EmbedPdfViewerProps {
   onClose?: () => void;
@@ -142,7 +163,11 @@ const EmbedPdfViewerContent = ({
   const damagedRepair = useDamagedFileRepair();
   const viewerRef = React.useRef<HTMLDivElement>(null);
   const pdfContainerRef = useRef<HTMLDivElement>(null);
-  const [isViewerHovered, setIsViewerHovered] = React.useState(false);
+  // Read only by the keydown handler; a ref avoids re-rendering on hover.
+  const isViewerHoveredRef = React.useRef(false);
+  // The pages' scrollbar, which the page bar stops short of to centre on them.
+  const [scrollbarWidth, setScrollbarWidth] = useState(0);
+  const registeredPageTool = useViewerPageTool();
 
   const {
     isThumbnailSidebarVisible,
@@ -156,12 +181,13 @@ const EmbedPdfViewerContent = ({
     searchInterfaceActions,
     zoomActions,
     scrollActions,
-    panActions: _panActions,
+    panActions,
     rotationActions,
     getScrollState,
     getSpreadState,
     getZoomState,
     registerImmediateZoomUpdate,
+    registerImmediateRotationUpdate,
     getRotationState,
     zoomRestorePendingRef,
     notifyZoomRestoreSettled,
@@ -527,7 +553,7 @@ const EmbedPdfViewerContent = ({
   // Get current file from FileContext
   const selectors = useFileSelectors();
   const { actions } = useFileActions();
-  const { files: activeFiles } = useAllFiles();
+  const { files: activeFiles, fileStubs: activeFileStubs } = useAllFiles();
   const activeFilesRef = useRef(activeFiles);
   activeFilesRef.current = activeFiles;
   const activeFileIds = activeFiles.map((f) => f.fileId);
@@ -542,6 +568,7 @@ const EmbedPdfViewerContent = ({
   } = useNavigationGuard();
 
   const { selectedTool } = useNavigationState();
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     if (selectedTool !== "redact") {
@@ -569,6 +596,9 @@ const EmbedPdfViewerContent = ({
 
   // FormFill tool mode — uses PDFBox backend for full-fidelity form handling
   const isFormFillToolActive = (selectedTool as string) === "formFill";
+
+  const pageTool = previewFile ? null : registeredPageTool;
+  const pageToolActive = pageTool != null;
 
   // Form overlays are shown in BOTH modes:
   // - Normal viewer: form overlays visible (PDFium WASM, frontend-only)
@@ -702,11 +732,44 @@ const EmbedPdfViewerContent = ({
       return `preview-${previewFile.name}|${previewFile.size}|${previewFile.lastModified}`;
     }
     if (currentFile && isStirlingFile(currentFile)) {
-      const stub = selectors.getStirlingFileStub(currentFile.fileId);
+      const stub = activeFileStubs.find(({ id }) => id === currentFile.fileId);
       return stub?.originalFileId ?? stub?.id ?? currentFile.fileId;
     }
     return currentFileId;
-  }, [previewFile, currentFile, currentFileId, selectors]);
+  }, [previewFile, currentFile, currentFileId, activeFileStubs]);
+
+  // A page tool draws in the page's own orientation, so a view rotation would
+  // leave its layers off the page content. The rotation comes back when the
+  // tool closes, if the same document is still open.
+  const heldRotationRef = useRef<{ rootId: string | null; rotation: number }>(
+    null,
+  );
+  useEffect(() => {
+    if (!pageToolActive) return;
+    heldRotationRef.current ??= {
+      rootId: currentFileRootId ?? null,
+      rotation: getRotationState().rotation,
+    };
+    const straighten = (rotation: number) => {
+      if (rotation !== 0) rotationActions.setRotation(0);
+    };
+    straighten(getRotationState().rotation);
+    return registerImmediateRotationUpdate(straighten);
+  }, [
+    pageToolActive,
+    currentFileRootId,
+    rotationActions,
+    getRotationState,
+    registerImmediateRotationUpdate,
+  ]);
+  useEffect(() => {
+    if (pageToolActive) return;
+    const held = heldRotationRef.current;
+    heldRotationRef.current = null;
+    if (held?.rotation && held.rootId === (currentFileRootId ?? null)) {
+      rotationActions.setRotation(held.rotation);
+    }
+  }, [pageToolActive, currentFileRootId, rotationActions]);
 
   // Determine the effective file to display
   const effectiveFile = React.useMemo(() => {
@@ -817,6 +880,7 @@ const EmbedPdfViewerContent = ({
                 return;
               case "a":
               case "A":
+                if (pageToolActive) return;
                 // Intercept unconditionally so the browser can't blanket-select the surrounding UI chrome.
                 event.preventDefault();
                 {
@@ -847,8 +911,8 @@ const EmbedPdfViewerContent = ({
 
       // All remaining shortcuts require the viewer to be hovered so they
       // don't conflict with the rest of the UI when the viewer is mounted
-      // but not the active focus target.
-      if (!isViewerHovered) return;
+      // but not the active focus target. A page tool binds its own.
+      if (!isViewerHoveredRef.current || pageToolActive) return;
 
       // Modifier key shortcuts (Ctrl/Cmd + key)
       if (mod) {
@@ -932,7 +996,7 @@ const EmbedPdfViewerContent = ({
       document.removeEventListener("keydown", handleKeyDown);
     };
   }, [
-    isViewerHovered,
+    pageToolActive,
     isSearchInterfaceVisible,
     zoomActions,
     searchInterfaceActions,
@@ -1414,6 +1478,16 @@ const EmbedPdfViewerContent = ({
   // Register navigation warning handlers so the global modal can call our save/discard logic
   useEffect(() => {
     if (previewFile || isFormFillToolActive) return;
+    // The guard holds one set of handlers: while a page tool owns the pages,
+    // its discard is the one that matters.
+    if (pageTool) {
+      const discard = pageTool.onDiscard;
+      registerNavigationWarningHandlers({
+        onApplyAndContinue: pageTool.onSave,
+        onDiscardAndContinue: async () => discard?.(),
+      });
+      return () => unregisterNavigationWarningHandlers();
+    }
 
     registerNavigationWarningHandlers({
       onApplyAndContinue: async () => {
@@ -1436,6 +1510,7 @@ const EmbedPdfViewerContent = ({
   }, [
     previewFile,
     isFormFillToolActive,
+    pageTool,
     applyChanges,
     discardAndSaveApplied,
     registerNavigationWarningHandlers,
@@ -1793,6 +1868,15 @@ const EmbedPdfViewerContent = ({
     rulerOverlayRef,
   });
 
+  // A page tool takes the pages' pointer input and draws its own find, so the
+  // viewer's ruler, pan and search stand down while it is open.
+  useEffect(() => {
+    if (!pageToolActive) return;
+    setIsRulerActive(false);
+    panActions.disablePan();
+    searchInterfaceActions.close();
+  }, [pageToolActive, setIsRulerActive, panActions, searchInterfaceActions]);
+
   // Register workbench bar buttons for the viewer
   useViewerWorkbenchBarButtons(
     isRulerActive,
@@ -1849,20 +1933,66 @@ const EmbedPdfViewerContent = ({
     isCurrentFileEncrypted,
   ]);
 
+  const hasPages = !!effectiveFile;
+  // A sidebar or a page tool's column narrows the pages area without a window resize.
+  useEffect(() => {
+    const area = pdfContainerRef.current;
+    if (!area) return;
+    let width = area.clientWidth;
+    // The margin animates, so the observer sees every width in between; compare
+    // against the width before the change began, not the last frame of it.
+    let settledWidth = width;
+    let settle: number | undefined;
+    const observer = new ResizeObserver(() => {
+      if (Math.abs(area.clientWidth - width) < 1) return;
+      width = area.clientWidth;
+      window.clearTimeout(settle);
+      settle = window.setTimeout(() => {
+        const before = settledWidth;
+        settledWidth = area.clientWidth;
+        const { level } = getZoomState();
+        const refit = shouldRefitOnResize({
+          fitting: level === ZoomMode.FitWidth || level === ZoomMode.Automatic,
+          before,
+          after: settledWidth,
+          widestPage: widestPage(area),
+        });
+        if (refit) zoomActions.requestZoom(ZoomMode.FitWidth);
+      }, FIT_WIDTH_SETTLE_MS);
+    });
+    observer.observe(area);
+    return () => {
+      observer.disconnect();
+      window.clearTimeout(settle);
+    };
+  }, [hasPages, getZoomState, zoomActions]);
+
   const sidebarWidthRem = 15;
   const commentsSidebarWidthRem = 15;
-  const totalRightMargin =
+  const sidebarsMarginRem =
     (isThumbnailSidebarVisible ? sidebarWidthRem : 0) +
     (isBookmarkSidebarVisible ? sidebarWidthRem : 0) +
     (isAttachmentSidebarVisible ? sidebarWidthRem : 0) +
     (isLayerSidebarVisible ? sidebarWidthRem : 0) +
     (isCommentsSidebarVisible ? commentsSidebarWidthRem : 0);
+  const rightInsetRem = pageTool?.rightInsetRem ?? 0;
+  const pagesPastInset = usePagesPastInset(
+    pdfContainerRef,
+    rightInsetRem,
+    sidebarsMarginRem,
+  );
+  const totalRightMargin =
+    sidebarsMarginRem + (pagesPastInset ? 0 : rightInsetRem);
 
   return (
     <Box
       ref={viewerRef}
-      onMouseEnter={() => setIsViewerHovered(true)}
-      onMouseLeave={() => setIsViewerHovered(false)}
+      onMouseEnter={() => {
+        isViewerHoveredRef.current = true;
+      }}
+      onMouseLeave={() => {
+        isViewerHoveredRef.current = false;
+      }}
       style={{
         position: "relative",
         height: "100%",
@@ -1926,23 +2056,42 @@ const EmbedPdfViewerContent = ({
           {currentFile && isStirlingFile(currentFile) && (
             <PdfProtectionStatus key={currentFile.fileId} file={currentFile} />
           )}
+          {pageTool ? (
+            <pageTool.Toolbar />
+          ) : (
+            selectedTool === "pdfTextEditor" &&
+            !isMobile &&
+            !previewFile && (
+              // Holds the editor bar's place while the editor loads, so the
+              // bar shows at once and the pages do not shift when it lands.
+              <div
+                className="pdf-editor-topbar pdf-editor-topbar--pending"
+                data-testid="pdf-editor-toolbar-pending"
+              />
+            )
+          )}
           {/* EmbedPDF Viewer */}
           <Box
             ref={pdfContainerRef}
+            data-viewer-pages
+            {...{ [PAGES_PAST_INSET_ATTR]: pagesPastInset || undefined }}
             style={{
+              ["--viewer-right-inset" as string]: `${rightInsetRem}rem`,
               position: "relative",
               flex: 1,
               overflow: "hidden",
               minHeight: 0,
               minWidth: 0,
               marginRight: `${totalRightMargin}rem`,
-              transition: "margin-right 0.3s ease",
+              // The card in the inset tracks this box's edge; animating the margin would slide it.
+              transition: rightInsetRem ? undefined : "margin-right 0.3s ease",
             }}
           >
             <LocalEmbedPDF
               key={currentFileRootId || "no-file"}
               shouldSkipBytes={shouldSkipBytes}
               onPageLayout={handleViewerPageLayout}
+              onScrollbarWidthChange={setScrollbarWidth}
               onDocumentSwapped={handleDocumentSwapped}
               onDocumentSwapFailed={handleDocumentSwapFailed}
               onDocumentReady={documentReady}
@@ -1976,7 +2125,13 @@ const EmbedPdfViewerContent = ({
               enableFormFill={
                 shouldEnableFormFill && !pdfEditingLocked(pdfAccess)
               }
+              pdfAccessPending={!pdfAccess}
               formEditingActive={isFormFillToolActive}
+              pageLayer={
+                pageTool && pageTool.fileId === currentFileStableId
+                  ? pageTool.PageLayer
+                  : null
+              }
               isManualRedactionMode={isManualRedactMode}
               signatureApiRef={signatureApiRef}
               annotationApiRef={annotationApiRef}
@@ -2004,6 +2159,7 @@ const EmbedPdfViewerContent = ({
             <FormSaveBar
               file={currentFile ?? null}
               isFormFillToolActive={isFormFillToolActive}
+              hidden={!!pageTool?.hidesFormNotice}
               onApply={handleFormApply}
               policyEnforcing={policyEnforcing}
             />
@@ -2023,6 +2179,7 @@ const EmbedPdfViewerContent = ({
               onCalibrationMeasure={handleScaleCalibrationMeasurement}
             />
           </Box>
+          {pageTool?.BottomBar && <pageTool.BottomBar />}
           <ScaleCalibrationDialog
             opened={!!scaleCalibrationMeasurement}
             measurement={scaleCalibrationMeasurement}
@@ -2034,7 +2191,7 @@ const EmbedPdfViewerContent = ({
       )}
 
       {/* Bottom Toolbar Overlay */}
-      {effectiveFile && (
+      {effectiveFile && !pageTool?.BottomBar && (
         <div
           className="pdf-viewer-toolbar-dock"
           style={{
@@ -2043,7 +2200,13 @@ const EmbedPdfViewerContent = ({
             // floating card rather than one welded to the viewport edge.
             bottom: "0.5rem",
             left: 0,
-            right: 0,
+            // Centres on the pages: clear of the side panels (always on the
+            // right) and the scrollbar (on the inline end, so left in RTL). As
+            // the toolbar's size container, a narrow dock drops controls
+            // rather than overlapping a panel.
+            right: `${totalRightMargin}rem`,
+            paddingInlineEnd: `${scrollbarWidth}px`,
+            transition: "right 0.3s ease",
             zIndex: 50,
             display: "flex",
             justifyContent: "center",

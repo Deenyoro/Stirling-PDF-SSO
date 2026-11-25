@@ -12,7 +12,8 @@ import {
 } from "@editor/contexts/NavigationContext";
 import { isBaseWorkbench } from "@editor/types/workbench";
 import { VIEWER_SUPPORTED_EXTENSIONS } from "@editor/utils/fileUtils";
-import { useIsPhone } from "@editor/hooks/useIsMobile";
+import { useIsMobile, useIsPhone } from "@editor/hooks/useIsMobile";
+import { useViewerPageTool } from "@editor/contexts/viewer/ViewerPageTool";
 import styles from "@editor/components/layout/Workbench.module.css";
 
 import WorkbenchBar from "@editor/components/shared/WorkbenchBar";
@@ -27,6 +28,7 @@ import LandingPage from "@editor/components/shared/LandingPage";
 import DismissAllErrorsButton from "@editor/components/shared/DismissAllErrorsButton";
 import { NotificationBell } from "@editor/components/notifications/NotificationBell";
 import { FeedbackTag } from "@editor/components/feedback/FeedbackTag";
+import { ReviewHost } from "@editor/tools/pdfTextEditor/components/review/ReviewHost";
 
 // Workbench panels are loaded on demand. Viewer pulls in pdfjs-dist and the
 // full @embedpdf plugin set; FileEditor/PageTracks are only needed once a file
@@ -87,6 +89,12 @@ export default function Workbench() {
   // bar, outside the bar's overflow-clipped wrapper. Scoped to the viewer.
   const [viewerToolbarCollapsed, setViewerToolbarCollapsed] = useState(false);
   const showReopenTab = currentView === "viewer" && viewerToolbarCollapsed;
+  // A page tool brings its own header, and a small screen has no height to
+  // spare for the viewer's as well.
+  const isMobile = useIsMobile();
+  const pageToolActive = useViewerPageTool() != null;
+  const pageToolOwnsTop =
+    isMobile && pageToolActive && currentView === "viewer";
 
   // The WorkbenchBar carries file-scoped actions, so it only shows once a file
   // is open or a custom view supplies content; otherwise the search floats.
@@ -94,7 +102,9 @@ export default function Workbench() {
     (v) => v.workbenchId === currentView,
   );
   const topControlsAvailable =
-    currentView !== "signing" && !activeCustomView?.hideTopControls;
+    currentView !== "signing" &&
+    !activeCustomView?.hideTopControls &&
+    !pageToolOwnsTop;
   const hasWorkbenchContent =
     hasFiles ||
     fileIds.length > 0 ||
@@ -273,6 +283,7 @@ export default function Workbench() {
 
       {/* Dismiss All Errors Button */}
       <DismissAllErrorsButton />
+      <ReviewHost />
 
       {/* Main content area */}
       <Box
